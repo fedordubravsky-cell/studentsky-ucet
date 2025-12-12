@@ -1,0 +1,87 @@
+// the semi-colon at the start is a safety net against concatenated
+// scripts and/or other plugins which may not be closed properly.
+;
+// Init Namespaces
+window.PuiTheme = window.PuiTheme || {};
+
+// Run in code namespace window.PuiTheme
+(function (ns, $) {
+    ns.PuiLocaleToggle = {
+        _defaults: {
+            locales: [],                                                    // list of available locales - ll_RR
+            localeUrlMapping: {},                                           // urls needed to switch to given locale
+            currentLocale: "",
+            toggleSelectors: ["a.pui-locale-toggle[data-target-locale]"],   // array of selectors describing toggles to be initialized
+            currentLocaleClass: "pui-active",                               // class to mark toggle pointing to current locale
+            targetLocaleDataAttribute: "target-locale"                      // data attribute describing locale to be activated via given toggle
+        },
+        options: {},
+
+        /**
+         * Inits locale toggles found on page
+         *
+         * @param {Object} localeSettings (see structure of _defaults)
+         */
+        initToggles: function (localeSettings) {
+            var module = this;
+            module.options = $.extend({}, module._defaults, localeSettings || {});
+            var options = module.options
+            var $switchers = $(options.toggleSelectors.toString());
+
+            $switchers.each(function () {
+                var $switcher = $(this);
+                var targetLocale = $switcher.data(options.targetLocaleDataAttribute);
+                var isCurrentLocale = options.currentLocale === targetLocale;
+                var targetUrl = module.getLocaleUrl(targetLocale);
+
+                $switcher.toggleClass(options.currentLocaleClass, isCurrentLocale);
+
+                // check whether target URL exists
+                if (typeof targetUrl !== "string") {
+                    targetUrl = "#";
+                }
+
+                $switcher.attr("href", targetUrl);
+            });
+        },
+
+        /**
+         * Adds locale setting to options
+         *
+         * @param {String} locale
+         * @param {String} url
+         */
+        addLocale: function(locale, url) {
+            var module = this;
+
+            module.options.locales.push(locale);
+            module.options.localeUrlMapping[locale] = url;
+        },
+
+        /**
+         * Removes locale from options
+         *
+         * @param {String} locale
+         */
+        removeLocale: function(locale) {
+            var module = this;
+
+            var itemIndex = module.options.locales.indexOf(locale);
+            if (itemIndex >= 0) {
+                module.options.locales.splice(itemIndex, 1)
+            }
+            delete module.options.localeUrlMapping[locale];
+        },
+
+        /**
+         * Returns url belonging to locale
+         *
+         * @param {Object} locale
+         * @returns {String}
+         */
+        getLocaleUrl: function(locale) {
+            var module = this;
+            return module.options.localeUrlMapping[locale];
+        }
+    };
+})(window.PuiTheme, jQuery);

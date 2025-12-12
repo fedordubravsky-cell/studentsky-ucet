@@ -1,0 +1,112 @@
+/**
+ * COMPONENT PROPOSAL: Collapsible list
+ *
+ * Component provide more/less buttons for lists (ul, ol, dl)
+ * and makes them collapsible.
+ */
+/**
+ * the semi-colon at the start is a safety net against concatenated
+ * scripts and/or other plugins which may not be closed properly.
+ */
+;
+
+/**
+ * JS namespace init
+ * @type {{}|*}
+ */
+window.PuiTheme = window.PuiTheme || {};
+
+// Collapsible List component
+(function (ns, $) {
+    /**
+     * Initiates Collapsible List component
+     *
+     * @constructor
+     */
+    ns.HtmlCollapsibleList = function (options) {
+        var widget = this;
+        widget.options = $.extend({}, widget._defaults, options || {});
+        widget._init();
+    };
+
+    $.extend(ns.HtmlCollapsibleList.prototype, {
+        _defaults: {
+            componentSelector: '.html-c-collapsible-list',
+            splitSelectorDefault: '.html-readmore',
+            toggleButton: '.html-readmore-button',
+            notToggleButton: ':not(.html-readmore-button)',
+            dataExpanded: 'text-expanded',
+            dataCollapsed: 'text-collapsed',
+            collapsedClass: 'html-is-collapsed',
+            expandedClass: 'html-is-expanded'
+        },
+        _eventNamespace: '.htmlCollapsibleList',
+
+        /**
+         * Initialize component instances in document
+         *
+         * @private
+         */
+        _init: function () {
+            var widget = this;
+            this._bindEvents($(widget.options.componentSelector));
+        },
+
+        /**
+         * Bind events
+         *
+         * @param scope Element to bind events on.
+         * @private
+         */
+        _bindEvents: function(scope) {
+            var widget = this;
+
+            scope.append('<li class="' + widget.options.toggleButton.replace('.', '') + '"><a tabindex="0"></a></li>');
+
+            $(widget.options.toggleButton + ' a', scope)
+                .text(scope.data(widget.options.dataCollapsed))
+                .off('click' + widget._eventNamespace)
+                .on('click' + widget._eventNamespace, function(e) {
+                    e.preventDefault();
+                    widget._toggle($(this).closest(widget.options.componentSelector));
+                });
+
+            $(widget.options.toggleButton + ' a', scope)
+                .off('keypress' + widget._eventNamespace)
+                .on('keypress' + widget._eventNamespace, function(e) {
+                    if((e.keyCode == 0 || e.keyCode == 32)) {
+                        widget._toggle($(this).closest(widget.options.componentSelector));
+                    }
+                });
+
+            scope.addClass(widget.options.collapsedClass);
+        },
+
+        /**
+         * Toggle collapsed / expanded state on list
+         *
+         * @param scope Element to collapse (root list element).
+         * @private
+         */
+        _toggle: function(scope) {
+            var widget = this;
+
+            if(scope.hasClass(widget.options.collapsedClass)) {
+                $(widget.options.toggleButton + ' a', scope)
+                    .text(scope.data(widget.options.dataExpanded));
+
+                scope.removeClass(widget.options.collapsedClass).addClass(widget.options.expandedClass);
+            } else {
+                $(widget.options.toggleButton + ' a', scope)
+                    .text(scope.data(widget.options.dataCollapsed));
+
+                scope.removeClass(widget.options.expandedClass).addClass(widget.options.collapsedClass);
+            }
+        }
+    });
+
+    $(function () {
+        ns.collapsibleList = new ns.HtmlCollapsibleList();
+    });
+
+})(window.PuiTheme, jQuery);

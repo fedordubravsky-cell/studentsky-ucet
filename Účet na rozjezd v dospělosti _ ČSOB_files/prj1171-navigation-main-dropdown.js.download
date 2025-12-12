@@ -1,0 +1,343 @@
+// the semi-colon at the start is a safety net against concatenated
+// scripts and/or other plugins which may not be closed properly.
+;
+// Init Namespaces
+window.PuiTheme = window.PuiTheme || {};
+
+(function (ns, $) {
+    "use strict";
+
+    /**
+     * Component - PRJ1171 Navigation Main Dropdown.
+     *
+     * Dependencies: jQuery, PuiObservable
+     *
+     * @param {Object} [options] widget configuration options
+     * @constructor
+     */
+    ns.NavigationMainDropdown = function (options) {
+        const module = this;
+
+        module.options = $.extend({}, module._defaults, options || {});
+        module._init();
+    };
+
+    $.extend(ns.NavigationMainDropdown.prototype, {
+        _defaults: {
+            selectors: {
+                scope: '.pui-m-navigation-main',
+                dropdownComponent: '.html-c-prj1171',
+                dropdownButton: '.html-prj1171-button',
+                dropdownPopup: '.html-prj1171-popup',
+                focusableElements: 'a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+            },
+            attributeIds: {
+                attrDropdownId: 'data-prj1171-dropdown-id',
+                attrTargetDropdownId: 'data-prj1171-target-dropdown-id',
+            },
+            cssClasses: {
+                isCollapsed: 'html-is-collapsed',
+                isExpanded: 'html-is-expanded',
+                isActive: 'html-is-active',
+            },
+            dataAttributes: {
+                dropdownId: 'prj1171DropdownId',
+                targetDropdownId: 'prj1171TargetDropdownId',
+            },
+            eventsToObserve: {
+                openDropdown: 'navigationMain.openDropdown',
+                closeDropdown: 'navigationMain.closeDropdown',
+                closeOtherDropdowns: 'navigationMain.closeOtherDropdowns',
+            },
+            pluginOptions: {},
+        },
+        options: {}, // constructed in _init()
+        $elements: {},
+        eventNamespace: '.NavigationMainDropdown',
+        externalToggleEventName: 'prj1171ExternalToggle',
+
+        /**
+         * Inits dropdowns
+         *
+         * @private
+         */
+        _initDropdowns: function () {
+            const module = this;
+            const options = module.options;
+            const selectors = options.selectors;
+            const attributeIds = options.attributeIds;
+            const cssClasses = options.cssClasses;
+            const dataAttributes = options.dataAttributes;
+            const eventCloseOtherDropdowns = options.eventsToObserve.closeOtherDropdowns;
+            const eventOpenDropdown = options.eventsToObserve.openDropdown;
+            const eventCloseDropdown = options.eventsToObserve.closeDropdown;
+            const $scope = module.$elements.scope;
+
+            /**
+             * Sets the state of the dropdown (expanded or collapsed).
+             *
+             * @param {jQuery} $dropdown - jQuery object representing the dropdown
+             * @param {boolean} willBeExpanded - true if the dropdown will be expanded, false if it will be collapsed
+             * @private
+             */
+            function _setDropdownState($dropdown, willBeExpanded) {
+                $dropdown
+                    .toggleClass(cssClasses.isExpanded, willBeExpanded)
+                    .toggleClass(cssClasses.isCollapsed, !willBeExpanded);
+            }
+
+            $(`${selectors.dropdownComponent}[${attributeIds.attrDropdownId}]`, $scope).each(function () {
+                const $dropdown = $(this);
+                const dropdownId = $dropdown.data(dataAttributes.dropdownId);
+                const $dropdownPopup = $dropdown.find(selectors.dropdownPopup);
+                let isPointerOver = false;
+
+                $dropdown
+                    .off('focusout' + module.eventNamespace)
+                    .on('focusout' + module.eventNamespace, (event) => {
+                        const relatedTarget = event.relatedTarget;
+                        const relatedTargetDropdownId = $(relatedTarget).data(dataAttributes.targetDropdownId);
+
+                        if (isPointerOver  && !event.relatedTarget) {
+                            // Handle case when focus is lost due to pointer click inside submenu
+                            $(event.target).trigger('focus');
+                        } else if (!relatedTarget || $dropdown.has(relatedTarget).length === 0) {
+                            // Do not act when focus is lost by click on external toggle
+                            if ($dropdown.hasClass(cssClasses.isExpanded) && (relatedTargetDropdownId !== dropdownId)) {
+                                window.puiObservable.dispatch(eventCloseDropdown, {relatedDropdownId: dropdownId});
+                            }
+                        }
+                    })
+                    .off('keydown' + module.eventNamespace)
+                    .on('keydown' + module.eventNamespace, (event) => {
+                        if (event.key === 'Escape') {
+                            event.preventDefault();
+
+                            if ($dropdown.hasClass(cssClasses.isExpanded)) {
+                                const $dropdownButton = $(`${selectors.dropdownButton}[${attributeIds.attrTargetDropdownId}="${dropdownId}"]`, $scope);
+
+                                window.puiObservable.dispatch(eventCloseDropdown, {relatedDropdownId: dropdownId});
+                                $dropdownButton.trigger('focus');
+                            }
+                        }
+                    });
+
+                $dropdownPopup
+                    .off('keydown' + module.eventNamespace)
+                    .on('keydown' + module.eventNamespace, (event) => {
+                        const isExpanded = $dropdown.hasClass(cssClasses.isExpanded);
+
+                        if (event.key === 'ArrowDown' && isExpanded) {
+                            event.preventDefault();
+                            module._moveFocus($dropdownPopup, 1);
+                        } else if (event.key === 'ArrowUp' && isExpanded) {
+                            event.preventDefault();
+                            module._moveFocus($dropdownPopup, -1);
+                        }
+                    })
+                    .off('mouseenter' + module.eventNamespace)
+                    .on('mouseenter' + module.eventNamespace, () => {
+                        isPointerOver = true;
+                    })
+                    .off('mouseleave' + module.eventNamespace)
+                    .on('mouseleave' + module.eventNamespace, () => {
+                        isPointerOver = false;
+                    });
+
+                window.puiObservable.subscribe(eventOpenDropdown, function (data) {
+                    if (data.relatedDropdownId === dropdownId) {
+                        _setDropdownState($dropdown, true);
+                    }
+                });
+
+                window.puiObservable.subscribe(eventCloseDropdown, function (data) {
+                    if (data.relatedDropdownId === dropdownId) {
+                        _setDropdownState($dropdown, false);
+                    }
+                });
+
+                window.puiObservable.subscribe(eventCloseOtherDropdowns, function (data) {
+                    if (data.relatedDropdownId !== dropdownId) {
+                        _setDropdownState($dropdown, false);
+                    }
+                });
+            });
+        },
+
+        /**
+         * Moves focus within dropdown component
+         *
+         * @param {jQuery} $dropdown - jQuery object representing the dropdown
+         * @param {-1|0|1} direction - should be 1 for forward, -1 for backward, and 0 for reset
+         *
+         * @private
+         */
+        _moveFocus: function ($dropdown, direction) {
+            const module = this;
+            const options = module.options;
+            const selectors = options.selectors;
+            const focusableElements = selectors.focusableElements;
+            const $allFocusableElements = $dropdown.find(focusableElements);
+            const $visibleFocusableElements = $allFocusableElements.filter(function () {
+                return ($(this).css('visibility') !== 'hidden') && $(this).is(':visible');
+            });
+            const $focusedElement = $(document.activeElement);
+            const index = $visibleFocusableElements.index($focusedElement);
+
+            // Act only if there is focused element within dropdown or reset is requested
+            if (index !== -1 || direction === 0) {
+                let newIndex = 0;
+
+                if (direction === 1) {
+                    newIndex = index === $visibleFocusableElements.length - 1 ? 0 : index + 1;
+                } else if (direction === -1) {
+                    newIndex = index === 0 ? $visibleFocusableElements.length - 1 : index - 1;
+                }
+
+                $visibleFocusableElements.eq(newIndex).trigger('focus');
+            }
+        },
+
+        /**
+         * Inits toggle buttons embedded in component (own toggles)
+         *
+         * @private
+         */
+        _initOwnToggleButtons: function () {
+            const module = this;
+            const options = module.options;
+            const selectors = options.selectors;
+            const attributeIds = options.attributeIds;
+            const dataAttributes = options.dataAttributes;
+            const $scope = module.$elements.scope;
+
+            $(`${selectors.dropdownComponent} ${selectors.dropdownButton}[${attributeIds.attrTargetDropdownId}]`, $scope).each(function () {
+                const $toggle = $(this);
+                const targetDropdownId = $toggle.data(dataAttributes.targetDropdownId);
+
+                module.initToggleButton($toggle, targetDropdownId);
+            });
+        },
+
+        /**
+         * Returns delegated click event name to use for click event delegation
+         *
+         * @returns {string}
+         */
+        getExternalToggleEventName: function () {
+            return this.externalToggleEventName;
+        },
+
+        /**
+         * Inits individual toggle
+         *
+         * @param {jQuery} $toggle button to be activated
+         * @param {string} targetDropdownId related dropdown to be controlled
+         */
+        initToggleButton: function ($toggle, targetDropdownId) {
+            const module = this;
+            const options = module.options;
+            const selectors = options.selectors;
+            const dataAttributes = options.dataAttributes;
+            const cssClassIsActive = options.cssClasses.isActive;
+            const eventCloseOtherDropdowns = options.eventsToObserve.closeOtherDropdowns;
+            const eventOpenDropdown = options.eventsToObserve.openDropdown;
+            const eventCloseDropdown = options.eventsToObserve.closeDropdown;
+
+            // If data attribute prj1171TargetDropdownId is not provided, create it
+            if (!$toggle.data(dataAttributes.targetDropdownId)) {
+                $toggle.data(dataAttributes.targetDropdownId, targetDropdownId);
+            }
+
+            const togglingEvents = `click${module.eventNamespace} ${module.externalToggleEventName}`;
+
+            /**
+             * Sets the toggle button state (css class and aria-expanded attribute).
+             *
+             * @param {jQuery} $toggle - jQuery object representing the toggle button
+             * @param {boolean} willBeExpanded - true if the toggle will be expanded, false if it will be collapsed
+             */
+            function _setToggleState($toggle, willBeExpanded) {
+                $toggle
+                    .toggleClass(cssClassIsActive, willBeExpanded)
+                    .attr('aria-expanded', willBeExpanded ? 'true' : 'false');
+            }
+
+            $toggle.attr({
+                'aria-expanded': 'false',
+            });
+
+            $toggle
+                .off(togglingEvents)
+                .on(togglingEvents, () => {
+                    const willExpand = !$toggle.hasClass(cssClassIsActive);
+
+                    if (willExpand) {
+                        window.puiObservable.dispatch(eventCloseOtherDropdowns, {relatedDropdownId: targetDropdownId});
+                        window.puiObservable.dispatch(eventOpenDropdown, {relatedDropdownId: targetDropdownId});
+                    } else {
+                        window.puiObservable.dispatch(eventCloseOtherDropdowns, {});
+                    }
+                })
+                .off('keydown' + module.eventNamespace)
+                .on('keydown' + module.eventNamespace, (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        $toggle.trigger('click');
+                    } else if (event.key === 'ArrowDown') {
+                        const willExpand = !$toggle.hasClass(cssClassIsActive);
+
+                        event.preventDefault();
+
+                        if (willExpand) {
+                            $toggle.trigger('click');
+                        }
+
+                        // Focus on the first focusable element in the dropdown
+                        const $dropdown = $(`${selectors.dropdownComponent}[${options.attributeIds.attrDropdownId}="${targetDropdownId}"] ${selectors.dropdownPopup}`);
+                        module._moveFocus($dropdown, 0);
+                    }
+                });
+
+            window.puiObservable.subscribe(eventOpenDropdown, function (data) {
+                if (data.relatedDropdownId === targetDropdownId) {
+                    _setToggleState($toggle, true);
+                }
+            });
+
+            window.puiObservable.subscribe(eventCloseDropdown, function (data) {
+                if (data.relatedDropdownId === targetDropdownId) {
+                    _setToggleState($toggle, false);
+                }
+            });
+
+            window.puiObservable.subscribe(eventCloseOtherDropdowns, function (data) {
+                if (data.relatedDropdownId !== targetDropdownId) {
+                    _setToggleState($toggle, false);
+                }
+            });
+        },
+
+        /**
+         * Initializes the information tooltip component on a given DOM fragment.
+         *
+         * @private
+         */
+        _init: function () {
+            const module = this;
+            const options = module.options;
+            const selectors = options.selectors;
+
+            module.$elements.scope = $(selectors.scope);
+            module._initDropdowns();
+            module._initOwnToggleButtons();
+        }
+    });
+
+    // On document ready
+    $(function () {
+        if (typeof ns.NavigationMainDropdown !== 'undefined') {
+            ns.navigationMainDropdown = new ns.NavigationMainDropdown();
+        }
+    });
+})(window.PuiTheme, jQuery);

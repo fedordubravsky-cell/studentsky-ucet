@@ -1,0 +1,364 @@
+// the semi-colon at the start is a safety net against concatenated
+// scripts and/or other plugins which may not be closed properly.
+;
+// Init Namespaces
+window.PuiTheme = window.PuiTheme || {};
+
+(function (ns, $) {
+    "use strict";
+
+    /**
+     * PUI PSP Sticky menu features
+     *
+     * Dependencies (init): jQuery
+     * Dependencies (init): PuiTheme.SubNav
+     *
+     * @param options {JSON} widget configuration options
+     * @constructor
+     */
+    ns.StickyNav = function (options) {
+        var widget = this;
+        widget._initStickyNav(options);
+    };
+
+    /**
+     * Widget static init methods
+     */
+    $.extend(ns.StickyNav, {
+        _instances: {},
+        _defaultInstance: '_default',
+
+        /**
+         * Initializes the widget.
+         * If an instance with the given name does not exist, creates an instance with the given configuration.
+         * Executes the widget initialization on the specified DOM fragment.
+         *
+         * @param options {JSON} widget configuration options
+         * @param fragment {String|jQuery|DOMElement} the DOM fragment selector, jQuery object or DOM element
+         * @param instanceName {String?} the widget instance identifier
+         */
+        initWidget: function (options, fragment, instanceName) {
+            var instance = ns.StickyNav.getInstance(instanceName);
+
+            if (typeof instance === "undefined") {
+                instance = new ns.StickyNav(options);
+                ns.StickyNav._setInstance(instance, instanceName);
+            }
+
+            instance.init(fragment)
+        },
+
+        /**
+         * Returns the widget instance object.
+         * May return undefined if not yet initialized.
+         *
+         * @param instanceName {String?} the widget instance identifier
+         * @return {undefined|PuiTheme.StickyNav} widget instance
+         */
+        getInstance: function (instanceName) {
+            if (typeof instanceName === "undefined") {
+                instanceName = ns.StickyNav._defaultInstance;
+            }
+
+            return ns.StickyNav._instances[instanceName];
+        },
+
+        /**
+         * Stores the widget instance object.
+         *
+         * @param instance {PuiTheme.StickyNav} the widget instance
+         * @param instanceName {String?} the widget instance identifier
+         * @private
+         */
+        _setInstance: function (instance, instanceName) {
+            if (typeof instanceName === "undefined") {
+                instanceName = ns.StickyNav._defaultInstance;
+            }
+
+            ns.StickyNav._instances[instanceName] = instance;
+        }
+    });
+
+
+    $.extend(ns.StickyNav.prototype, {
+        _defaults: {
+            selectors: {
+                stickyNav: '.html-c-sticky-menu',
+                stickyNavHeading: '.html-b-heading .html-text',
+                stickyNavButtonContainer: '.html-b-control',
+
+                pageHeadingComponent: '.html-c-heading',
+                pageHeading: '.html-c-heading h1',
+                pageHeadingButton: '.html-c-hyperlink',
+                stickyNavSubNavContainer: '.html-b-subnavigation',
+                subNav: '.html-c-subnavigation',
+                header: '.pui-m-header-main',
+
+                link: '.html-b-subnav-item .html-link',
+
+                pageHeadingModule: '.pui-m-heading'
+
+            },
+            // css classes
+            cssClasses: {
+                isFixed: 'pui-is-fixed',
+                isActive: 'html-is-active'
+            },
+            // data attributes
+            dataAttr: {
+                stickyNav: 'sticky-nav',
+                stickyNavCaption: 'sticky-nav-caption'
+            },
+            activeOffsetTolerance: 300 // pixels
+        },
+
+        _options: {}, // constructed in _init()
+        _eventNamespace: '.PuiEventNamespace', // Event namespace for events
+
+
+        /**
+         * init component on page.
+         *
+         * @private
+         */
+        _initComponentsOnPage: function ($fragment) {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+
+            var $stickyNav = $(selectors.stickyNav, $fragment);
+            $stickyNav.each(function (index, componentInstance) {
+                var $componentInstance = $(componentInstance);
+
+                module._clonePageHeading($componentInstance);
+                module._cloneButtonFromHeading($componentInstance);
+                module._cloneAnchor($componentInstance);
+                module._showStickyNav($componentInstance);
+                module._bindScrollEvents($componentInstance);
+                module._fixPageLoadOffset($componentInstance);
+
+            });
+        },
+
+        /**
+         * Page heading h1 append to sticky navigation.
+         *
+         * @private
+         */
+        _clonePageHeading: function () {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+
+            var $pageHeading = $(document).find(selectors.pageHeading).html();
+            var $stickyMenuHeading = $(selectors.stickyNav).find(selectors.stickyNavHeading);
+            // Add page heading to sticky navigation
+            if ($pageHeading) {
+                $stickyMenuHeading.html($pageHeading);
+            }
+
+        },
+
+        /**
+         * Clone button to sticky nav from page heading.
+         *
+         * @private
+         */
+        _cloneButtonFromHeading: function () {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+            // Sticky nav
+            var $stickyNav = $(selectors.stickyNav);
+            // Page heading
+            var $pageHeadingComponent = $(selectors.pageHeadingComponent);
+            //Page heading button
+            var $pageHeadingComponentButton = $pageHeadingComponent.find(selectors.pageHeadingButton);
+            // Container for clone button from heading
+            var $stickyNavButtonContainer = $stickyNav.find(selectors.stickyNavButtonContainer);
+
+            // Clone element
+            $pageHeadingComponentButton
+                .clone(true)
+                .appendTo($stickyNavButtonContainer);
+        },
+
+        /**
+         * Clone anchor from sub navigation.
+         *
+         * @private
+         */
+        _cloneAnchor: function () {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+            var $stickyNav = $(selectors.stickyNav);
+
+            var $subNav = $(selectors.subNav);
+            var $stickyNavSubNavContainer = $stickyNav.find(selectors.stickyNavSubNavContainer);
+
+            $subNav
+                .clone(true)
+                .appendTo($stickyNavSubNavContainer);
+        },
+
+        /**
+         * Binds window scroll to events for active item detection.
+         *
+         * @private
+         */
+        _bindScrollEvents: function () {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+            var $stickyNav = $(selectors.stickyNav);
+            var $links = $stickyNav.find(selectors.link);
+
+            // Set active link
+            var scrollTimer = null;
+            $(window)
+                .off("scroll" + module._eventNamespace)
+                .on("scroll" + module._eventNamespace, function () {
+                    // delayed scroll
+                    if (!scrollTimer) {
+                        scrollTimer = setTimeout(function () {
+                            // set visible
+                            module._showStickyNav();
+
+                            // set active items
+                            module._setActiveItem($links);
+
+                            scrollTimer = null;
+                        }, 200);
+                    }
+                });
+
+        },
+
+        /**
+         * Toggles the quick navigation visibility.
+         *
+         * @private
+         */
+        _showStickyNav: function () {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+            var cssClasses = options.cssClasses;
+
+            var $stickyNav = $(selectors.stickyNav);
+            var $pageHeadingModuleHeight = $(selectors.pageHeadingModule).outerHeight();
+            var $subNavHeight = $(selectors.subNav).outerHeight();
+            var $headerHeight = $(selectors.header).outerHeight();
+
+            var elementHeight = $pageHeadingModuleHeight + $subNavHeight + $headerHeight;
+
+            var isVisible = $(window).scrollTop() > elementHeight;
+            $stickyNav.toggleClass(cssClasses.isFixed, isVisible);
+        },
+
+        /**
+         * Sets the active quick navigation item based on current scroll position.
+         *
+         * @param $links the quick navigation link items
+         * @private
+         */
+        _setActiveItem: function ($links) {
+            var module = this;
+            var options = module._options;
+            var cssClasses = options.cssClasses;
+
+            var windowScroll = $('html, body').scrollTop();
+            var activeThreshold = windowScroll + options.activeOffsetTolerance;
+            var closestOffset = Number.MAX_VALUE;
+            var $closestLink = $(null); // empty object
+
+            $.each($links, function (index, currentLink) {
+                var $targetLink = $(currentLink.hash);
+                var linkOffset = $targetLink.offset().top;
+                var delta = activeThreshold - linkOffset;
+                if (delta > 0 && delta < closestOffset) {
+                    closestOffset = delta;
+                    $closestLink = $(currentLink);
+                }
+            });
+
+            // remove all active links
+            $links.removeClass(cssClasses.isActive);
+            // set active link
+            $closestLink.addClass(cssClasses.isActive);
+        },
+
+        /**
+         * Fixes page load offset for anchors when sticky navigation is active.
+         *
+         * @private
+         */
+        _fixPageLoadOffset: function () {
+            var hash = window.location.hash;
+            if (hash && hash.length > 1) {
+                var re = new RegExp(/^[A-Za-z]+[\w\-\:\.]*$/);
+                var targetId = hash.substring(1);
+                if (re.test(targetId)){  //  test for unwanted characters
+                    var $targetElement = $('#' + targetId);
+                    if($targetElement.length > 0) {
+                        if (document.readyState === "complete") {
+                            ns.ScrollHelper.scrollToView($targetElement);
+                        } else {
+                            $(window).on('load', function() {
+                                ns.ScrollHelper.scrollToView($targetElement);
+                            });
+                        }
+                    }
+                }
+            }
+        },
+
+        /**
+         * Returns the height of the sticky menu container element.
+         *
+         * @returns {Number} the height of the sticky menu container element.
+         */
+        getStickyMenuHeight: function () {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+
+            var $stickyNav = $(selectors.stickyNav);
+
+            return $stickyNav.outerHeight();
+        },
+
+        /**
+         * Initializes the stickyNav.
+         *
+         * @param options
+         * @private
+         */
+        _initStickyNav: function (options) {
+            var module = this;
+
+            module._options = $.extend({}, module._defaults, options || {});
+
+            module._initComponentsOnPage(); // init function
+        },
+
+        init: function (fragment) {
+            var module = this;
+
+            var $fragment = $(fragment);
+
+            module._initComponentsOnPage($fragment);
+        }
+
+    });
+
+})(window.PuiTheme, jQuery);
+
+(function (ns, $) {
+    $(function () {
+        if (typeof ns.StickyNav !== "undefined") {
+            ns.StickyNav.initWidget();
+        }
+    });
+})(window.PuiTheme, jQuery);

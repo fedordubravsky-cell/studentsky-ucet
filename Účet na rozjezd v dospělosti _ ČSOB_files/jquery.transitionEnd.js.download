@@ -1,0 +1,29 @@
+/**
+ * By Osvaldas Valutis, www.osvaldas.info
+ * Available for use under the MIT License
+ * Binds one-call function to transition end. Has fallbackl for browsers with no transition support.
+ * @param {Function} Function, that is triggered on transition end.
+ * @returns {Function} 
+ */
+
+;
+(function ($, window, document, undefined) {
+    var s = document.body || document.documentElement, s = s.style, prefixTransition = '';
+
+    if (s.WebkitTransition == '')
+        prefixTransition = '-webkit-';
+    if (s.MozTransition == '')
+        prefixTransition = '-moz-';
+    if (s.OTransition == '')
+        prefixTransition = '-o-';
+
+    $.fn.extend({
+        onCSSTransitionEnd: function (callback) {
+            var $this = $(this);
+            $this.one('webkitTransitionEnd mozTransitionEnd oTransitionEnd otransitionend transitionend', callback);
+            if ((prefixTransition == '' && !('transition' in s)) || $this.css(prefixTransition + 'transition-duration') == '0s')
+                callback();
+            return this;
+        }
+    });
+})(jQuery, window, document);

@@ -1,0 +1,53 @@
+// the semi-colon at the start is a safety net against concatenated
+// scripts and/or other plugins which may not be closed properly.
+;
+// Init Namespaces
+window.PuiTheme = window.PuiTheme || {};
+
+(function (ns, $) {
+    "use strict";
+
+    /**
+     * PSP Scroll Helper Utility.
+     *
+     * Dependencies (runtime): jQuery
+     * @constructor
+     */
+    ns.ScrollHelper = function () {
+    };
+
+    /**
+     * Widget static init methods.
+     */
+    $.extend(ns.ScrollHelper, {
+        _defaults: {
+            offset: 0,
+            buffer: 10
+        },
+
+        /**
+         * Scrolls the given target element into view.
+         *
+         * @param $target jQuery target element
+         * @param options scroll options {offset, alignment, ...}
+         */
+        scrollToView: function ($target, options) {
+            options = $.extend({}, ns.ScrollHelper._defaults, options || {});
+            var offset = options.offset;
+            var buffer = options.buffer;
+            //Height of sticky nav
+            var stickyMenuInstance = ns.StickyNav.getInstance();
+            var stickyMenuHeight = 0;
+            if(stickyMenuInstance) {
+                stickyMenuHeight = stickyMenuInstance.getStickyMenuHeight() || 0;
+            }
+
+            $('html, body')
+                .stop(true, false)
+                .animate({
+                    scrollTop: $target.offset().top - buffer - stickyMenuHeight - offset
+                }, 1000, "swing");
+        }
+
+    });
+})(window.PuiTheme, jQuery);

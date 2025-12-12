@@ -1,0 +1,164 @@
+// the semi-colon at the start is a safety net against concatenated
+// scripts and/or other plugins which may not be closed properly.
+;
+// Init Namespaces
+window.Theme = window.Theme || {}; // legacy, required for support of older portlets
+window.PuiTheme = window.PuiTheme || {}; // current namespace, see bellow
+
+/**
+ * Theme.Events Module.
+ *
+ * Dependencies: jQuery
+ *
+ * @type namespace
+ * @version 1.0
+ */
+// legacy namespace, required for support of older portlets
+window.Theme.Events = window.Theme.Events || {};
+// current namespace for events, @see transformation at the end of file
+window.PuiTheme.EventsCommon = window.PuiTheme.EventsCommon || {};
+window.PuiTheme.EventDomReady = window.PuiTheme.EventDomReady || {};
+
+// Calculator UI
+(function (ns, $) {
+
+    "use strict";
+
+    /**
+     * Common event API.
+     */
+    ns.Common = {
+
+        /**
+         * Triggers the given event.
+         *
+         * @param eventType {String} The event type to trigger (see jQuery documentation)
+         * @param extraParameters {Array|Object?} Extra parameters to pass to the event handler (see jQuery documentation)
+         * @see http://api.jquery.com/trigger/
+         */
+        trigger: function (eventType, extraParameters) {
+            $(document).trigger(eventType, extraParameters);
+        },
+
+        /**
+         * Subscribes an event listener to the given event.
+         * This supports jQuery event namespacing.
+         *
+         * @param events {String} events to bind (see jQuery documentation)
+         * @param data {Object?} Additional data sent to the event handler (see jQuery documentation)
+         * @param handler {Function} The handler to be invoked (see jQuery documentation)
+         * @see http://api.jquery.com/on/
+         */
+        subscribe: function (events, data, handler) {
+            $(document).on(events, data, handler);
+        },
+
+
+        /**
+         * Unsubscribes listeners from the given event.
+         * This supports jQuery event namespacing.
+         * This should always be used only on namespaced events as it can remove other handlers as well.
+         *
+         * @param events {String} events to unbind (see jQuery documentation)
+         * @see http://api.jquery.com/off/
+         */
+        unsubscribe: function (events) {
+            $(document).off(events);
+        }
+    };
+
+    /**
+     * Dom Modification API.
+     * This API is intended to solve the problem, where dynamic applications modify the DOM, and theme
+     * decorators / functions not being able to detect this.
+     *
+     * The public event API name is <code>pdpDomReady</code>
+     */
+    ns.DomReady = {
+        _eventName: "pdpDomReady",
+
+        /**
+         * Subscribes to a Theme DomModified event.
+         * This is used as a replacement for document ready as this also supports being called on a dynamic page
+         * Where DOM fragments can be modified/added. Applications doing such modifications should trigger the
+         * DomModified event (see #trigger() below).
+         * Subscribed handlers are also automatically invoked on jQuery document ready as this is considered as
+         * the inital DOM modification.
+         * If the namespace is not a String, the operation fails
+         * If the handler is not a Function, the operation fails
+         *
+         * @param namespace {String} The subscriber namespace, this is used to unsubscribe the event if its needed
+         * @param data {Object?} Additional data sent to the event handler (see linked API)
+         * @param handler {Function} The handler to be invoked (see linked API)
+         * @see Theme.Events.Common#subscribe()
+         */
+        subscribe: function (namespace, data, handler) {
+            var module = this;
+            if (typeof namespace !== "string") {
+                console.log("Unable to bind " + module._eventName + " DomReady event - namespace is not a String");
+                return false;
+            }
+
+            var eventFullName = module._eventName + "." + namespace;
+
+            if (typeof handler !== "function") {
+                console.log("Unable to bind " + eventFullName + " DomReady event - handler is not a Function");
+                return false;
+            }
+
+            ns.Common.subscribe(eventFullName, data, handler);
+        },
+
+        /**
+         * Unsubscribes the given event handlers.
+         * If the namespace is not a String, the operation fails
+         *
+         * @param namespace {String} The name of the event handlers to unsubscribe
+         * @see Theme.Events.Common#unsubscribe()
+         */
+        unsubscribe: function (namespace) {
+            var module = this;
+
+            if (typeof namespace !== "string") {
+                console.log("Unable to unbind " + module._eventName + " DomReady event - namespace is not a String");
+                return false;
+            }
+
+            var eventFullName = module._eventName + "." + namespace;
+
+            ns.Common.unsubscribe(eventFullName);
+        },
+
+        /**
+         * Triggers the DomModified event handlers.
+         * The subscribed handlers are executed with the given DOM fragment as context
+         * If the context is undefined, <code>document</code> is used.
+         *
+         * @param context {HTMLElement|jQuery} the DOM fragment to use as context
+         * @see Theme.Events.Common#trigger()
+         */
+        trigger: function (context) {
+            var module = this;
+            var eventFullName = module._eventName;
+
+            // default document trigger
+            if (typeof context === "undefined") {
+                context = document;
+            }
+
+            ns.Common.trigger(eventFullName, context);
+        }
+    };
+
+
+    // Trigger the pdpDomReady event on jQuery document ready
+    $(function () {
+        ns.DomReady.trigger(document);
+        // TODO MZU: handle subscriptions after document ready?
+    });
+
+})(window.Theme.Events, jQuery);
+
+// transform legacy to current namespace
+window.PuiTheme.EventsCommon = window.Theme.Events.Common;
+window.PuiTheme.EventDomReady = window.Theme.Events.DomReady;

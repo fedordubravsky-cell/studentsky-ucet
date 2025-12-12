@@ -1,0 +1,122 @@
+/**
+ * the semi-colon at the start is a safety net against concatenated
+ * scripts and/or other plugins which may not be closed properly.
+ */
+;
+
+/**
+ * JS namespace init
+ * @type {{}|*}
+ */
+window.PuiTheme = window.PuiTheme || {};
+
+// Init the Npwprb.Themes namespace
+(function (ns, $, undefined) {
+
+    /**
+     * Menu item highlighting.
+     *
+     * @constructor
+     */
+    ns.HeaderMenuHighlight = function (options) {
+        var widget = this;
+        widget.options = $.extend({}, widget._defaults, options || {});
+        widget._init();
+    };
+
+    $.extend(ns.HeaderMenuHighlight.prototype, {
+        _defaults: {
+            cssActive: 'html-is-active',
+            cssNoneActive: 'html-is-none-active',
+            selector: {
+                container: '.html-b-mainmenu-list',
+                targetItems: 'a.html-link, a.html-submenu-link',
+                activeItemParent: null
+            }
+        },
+        _activeUrls: [],
+
+        _init: function (options) {
+            var widget = this;
+            widget.options = $.extend({}, widget._defaults, options || {});
+            widget._scanItems();
+        },
+
+        /**
+         * Scans all links and marks them as active.
+         * All items matching the configured container and item selectors are compared to the active URL list.
+         * Items matching an active URL marks the item as active in the menu.
+         */
+        _scanItems: function () {
+            var widget = this;
+            var $navigationConatiner = $(widget.options.selector.container);
+            var $autoActivateLinks = $(widget.options.selector.targetItems, $navigationConatiner);
+            var found = false;
+
+            $autoActivateLinks
+                .each(function () {
+                    var $link = $(this);
+                    var menuUrl = widget._normalizeUrl($link.attr("href"));
+                    var actualPageUrl = widget._normalizeUrl(window.location.href.replace(window.location.protocol + "//" + window.location.hostname, ''));
+
+                    var $activeItemContainer = $link;
+                    if (widget.options.selector.activeItemParent !== null) {
+                        $activeItemContainer = $link.closest(widget.options.selector.activeItemParent);
+                    }
+
+                    // remove active link just to be sure it is not active by accident
+                    $activeItemContainer.removeClass(widget.options.cssActive);
+                    if (widget._matchUrl(menuUrl, actualPageUrl)) {
+                        $activeItemContainer.addClass(widget.options.cssActive);
+                    }
+                });
+
+            $navigationConatiner.toggleClass(widget.options.cssNoneActive, !found);
+        },
+
+        /**
+         * Compares the link URL to the target URL.
+         * Returns true if the link URL is considered the same as the target URL.
+         * Current logic converts both values to lowercase and checks whether the link URL ands with the target URL.
+         *
+         * @param linkUrl the link URL
+         * @param targetUrl the target URL to compare against
+         * @returns {boolean} true if the link URL is considered the same as the target URL
+         * @private
+         */
+        _matchUrl: function (linkUrl, targetUrl) {
+
+            /**
+             * Helper function since String.endsWith is suuported from ES6+
+             *
+             * @param source source string
+             * @param str target string
+             * @returns {boolean} true if source ends with str
+             */
+            function endsWith(source, str) {
+                return source === str;
+            }
+
+            return endsWith(linkUrl.toLowerCase(), targetUrl.toLowerCase());
+        },
+
+        /**
+         * Normalizes the link URL.
+         * Removes possible non-path segments from the given URL.
+         * Handles trailing slashes, query strings, fragments and Liferay portlet virtual friendly URLs
+         *
+         * @param url
+         * @returns normalized URL
+         * @private
+         */
+        _normalizeUrl: function (url) {
+            var result = url;
+            // replace backslashes for forward slashes
+            result = result.replace("\\", "/");
+            // trim Liferay virtual path, query string and fragments
+            result = result.replace(/((\/-\/|\/?\?).*)?\/?$/i, "");
+
+            return result;
+        }
+    });
+})(window.PuiTheme, jQuery);

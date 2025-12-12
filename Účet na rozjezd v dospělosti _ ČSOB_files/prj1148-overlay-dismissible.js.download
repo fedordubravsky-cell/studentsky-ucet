@@ -1,0 +1,288 @@
+// the semi-colon at the start is a safety net against concatenated
+// scripts and/or other plugins which may not be closed properly.
+;
+// Init Namespaces
+window.PuiTheme = window.PuiTheme || {};
+
+(function (ns, $) {
+    "use strict";
+
+    /**
+     * Component - PRJ1148 Overlay Dismissible
+     *
+     * Dependencies: jQuery, GEN1009 Overlay
+     *
+     * @version 1.0.0
+     *
+     * @param options {JSON} widget configuration options
+     * @constructor
+     */
+    ns.OverlaysDismissible = function (options) {
+        var module = this;
+
+        // deep copy of options
+        module._options = $.extend(true,{}, module._defaults, options || {});
+    };
+
+    /**
+     * Widget static init methods
+     */
+    $.extend(ns.OverlaysDismissible, {
+        _options: {
+            storageNamespace: "overlays"
+        },
+
+        /**
+         * Initializes the widget.
+         * If an instance with the given name does not exist, creates an instance with the given configuration.
+         * Executes the widget initialization on the specified DOM fragment.
+         *
+         * @param options {Object} widget configuration options
+         * @param fragment {String|jQuery|DOMElement} the DOM fragment selector, jQuery object or DOM element
+         * @param instanceName {String?} the widget instance identifier
+         * @public
+         */
+        initWidget: function (options, fragment, instanceName) {
+            var module = this;
+            var $instance = $('#' + instanceName);
+
+            options.callbackFunc = module._dismissCallback;
+            ns.Overlays.initWidget(options, $instance, instanceName);
+        },
+
+        /**
+         * Opens overlay
+         *
+         * @param instanceName {String?} the widget instance identifier
+         * @public
+         */
+        open: function (instanceName) {
+            var module = this;
+            var isOverlayOpen = false;
+
+            if (module._isOverlayEnabled(instanceName)) {
+                ns.Overlays.open(instanceName);
+                isOverlayOpen = true;
+            }
+
+            return isOverlayOpen;
+        },
+
+        /**
+         * Closes overlay
+         *
+         * @param instanceName {String?} the widget instance identifier
+         * @param trackingOptions {Object} Digital Tracking data object
+         * @public
+         */
+        close: function (instanceName, trackingOptions) {
+            ns.Overlays.close(instanceName, trackingOptions);
+        },
+
+        /**
+         * Sets widget as dismissed, not to be open next time
+         *
+         * @param instanceName {String?} the widget instance identifier
+         * @public
+         */
+        dismiss: function (instanceName) {
+            var module = this;
+            module._setOverlayDisplayStatus(instanceName, false);
+        },
+
+        /**
+         * Sets widget as enabled, could be open next time
+         *
+         * @param instanceName {String?} the widget instance identifier
+         * @public
+         */
+        revoke: function (instanceName) {
+            var module = this;
+            module._setOverlayDisplayStatus(instanceName, true);
+        },
+
+        /**
+         * Callback to be called when PuiTheme.Overlays instance is closed
+         *
+         * @param instance {PuiTheme.Overlays} the widget instance
+         * @private
+         */
+        _dismissCallback: function (instance) {
+            var instanceName = instance.getInstanceName();
+            ns.OverlaysDismissible.dismiss(instanceName);
+        },
+
+        /**
+         * Returns true if overlay was not dismissed
+         *
+         * @param overlayId {String?}
+         * @returns {boolean}
+         * @private
+         */
+        _isOverlayEnabled: function (overlayId) {
+            var module = this;
+            var overlayData = module._loadOverlayData();
+            var isEnabled = overlayData[overlayId];
+
+            return typeof isEnabled === "undefined" || isEnabled;
+        },
+
+        /**
+         * Sets and stores the overlay visibility preference.
+         *
+         * @param instanceName {string} the ID of the overlay
+         * @param isEnabled {boolean} whether the overlay could be open or not
+         * @private
+         */
+        _setOverlayDisplayStatus: function (instanceName, isEnabled) {
+            var module = this;
+            var overlayData = module._loadOverlayData();
+
+            overlayData[instanceName] = isEnabled;
+            module._storeOverlayData(overlayData);
+        },
+
+        /**
+         * Creates cookie
+         *
+         * @param {string} name of the cookie
+         * @param {string} value of the cookie
+         * @param {int} days to expire
+         * @private
+         */
+        _createCookie: function (name, value, days) {
+            var expires;
+            if (days) {
+                var date = new Date();
+                date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+                expires = "; expires=" + date.toGMTString();
+            } else {
+                expires = "";
+            }
+            document.cookie = name + "=" + value + expires + "; path=/";
+        },
+
+        /**
+         * Reads cookie
+         *
+         * @param {string} name of the cookie
+         * @return {string} value of the cookie
+         * @private
+         */
+        _readCookie: function (name) {
+            var nameEqualTo = name + "=";
+            var cookiesArray = document.cookie.split(';');
+            for (var i=0; i < cookiesArray.length; i++) {
+                var cookie = cookiesArray[i];
+                while (cookie.charAt(0) === ' ') {
+                    cookie = cookie.substring(1, cookie.length);
+                }
+                if (cookie.indexOf(nameEqualTo) === 0) {
+                    return cookie.substring(nameEqualTo.length, cookie.length);
+                }
+            }
+            return undefined;
+        },
+
+        /**
+         * Deletes cookie
+         *
+         * @param {string} name of the cookie
+         * @private
+         */
+        _eraseCookie: function (name) {
+            var module = this;
+            module._createCookie(name, "", -1);
+        },
+
+        /**
+         * Safely reads from localstorage.
+         * Fixes JS error when HTML5 localStorage disabled
+         *
+         * @param {string} storageNamespace - key to be read from localstorage
+         * @return {string} - value stored by the key storageNamespace
+         * @private
+         */
+        _localStorageSafeRead: function(storageNamespace) {
+            var module = this;
+            var storedValue = '';
+
+            try {
+                storedValue = localStorage[storageNamespace];
+                if (typeof storedValue === "undefined") {
+                    // try to read from cookies
+                    throw ('localStorageEmpty');
+                }
+            } catch (err) {
+                if (console && (typeof console.warn === 'function')) {
+                    if (err === 'localStorageEmpty') {
+                        console.warn('localstorage EMPTY, trying to read cookies');
+                    } else {
+                        console.warn('localstorage read FAILED');
+                    }
+                    storedValue = module._readCookie(storageNamespace);
+                }
+            }
+
+            return storedValue;
+        },
+
+        /**
+         * Safely writes to localstorage.
+         * Fixes JS error when HTML5 localStorage disabled
+         *
+         * @param {string} storageNamespace - key to be writen to localstorage
+         * @param {string} valueToStore - value to be writen to localstorage
+         * @private
+         */
+        _localStorageSafeWrite: function(storageNamespace, valueToStore) {
+            var module = this;
+
+            try {
+                localStorage[storageNamespace] = valueToStore;
+            } catch (err) {
+                if (console && (typeof console.warn === 'function')) {
+                    console.warn('localstorage write FAILED');
+                    module._createCookie(storageNamespace, valueToStore, 3000);
+                }
+            }
+        },
+
+        /**
+         * Stores the overlay data to local storage.
+         *
+         * @param {object} overlayData the overlay data object to storage
+         * @private
+         */
+        _storeOverlayData: function (overlayData) {
+            var module = this;
+            var storageNamespace = module._options.storageNamespace;
+
+            module._localStorageSafeWrite(storageNamespace, JSON.stringify(overlayData));
+        },
+
+        /**
+         * Loads the overlay data from local storage.
+         *
+         * @return {object} the overlay data object to storage
+         * @private
+         */
+        _loadOverlayData: function() {
+            var module = this;
+            var storageNamespace = module._options.storageNamespace;
+            var overlayDataString = module._localStorageSafeRead(storageNamespace);
+            var overlayData = null;
+
+            try {
+                overlayData = JSON.parse(overlayDataString);
+            } catch (err) {
+                // silent ignore and reset storage
+                overlayData = {};
+                module._storeOverlayData(overlayData);
+            }
+
+            return overlayData;
+        }
+    });
+
+})(window.PuiTheme, jQuery);

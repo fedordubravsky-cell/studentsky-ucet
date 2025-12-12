@@ -1,0 +1,341 @@
+// the semi-colon at the start is a safety net against concatenated
+// scripts and/or other plugins which may not be closed properly.
+;
+// Init Namespaces
+window.PuiTheme = window.PuiTheme || {};
+
+(function (ns, $) {
+    "use strict";
+
+    /**
+     * Component - GEN1010 information tooltip script.
+     * Adds demonstration logic of component user interaction.
+     *
+     * Dependencies: jQuery, jQueryUI (tooltip)
+     *
+     * @author  Michal Zubek, Milan Sedy
+     * @param options {JSON} widget configuration options
+     * @constructor
+     */
+    ns.InformationTooltipHtml = function (options) {
+        var module = this;
+
+        module.options = $.extend({}, module._defaults, options || {});
+    };
+
+    /**
+     * Widget static init methods
+     */
+    $.extend(ns.InformationTooltipHtml, {
+        _instances: {},
+        _defaultInstance: '_default',
+
+        /**
+         * Initializes the widget.
+         * If an instance with the given name does not exist, creates an instance with the given configuration.
+         * Executes the widget initialization on the specified DOM scope.
+         *
+         * @param options {JSON} widget configuration options
+         * @param scope {String|jQuery|DOMElement} the DOM scope selector, jQuery object or DOM element
+         * @param instanceName {String?} the widget instance identifier
+         */
+        initWidget: function (options, scope, instanceName) {
+            var instance = ns.InformationTooltipHtml._getInstance(instanceName);
+
+            if (typeof instance === "undefined") {
+                instance = new ns.InformationTooltipHtml(options);
+                ns.InformationTooltipHtml._setInstance(instance, instanceName);
+            }
+
+            instance.init(scope)
+        },
+
+        /**
+         * Returns the widget instance object.
+         * May return undefined if not yet initialized.
+         *
+         * @param instanceName {String?} the widget instance identifier
+         * @return {undefined|Concepts.InformationTooltipHtml} widget instance
+         * @private
+         */
+        _getInstance: function (instanceName) {
+            if (typeof instanceName === "undefined") {
+                instanceName = ns.InformationTooltipHtml._defaultInstance;
+            }
+
+            return ns.InformationTooltipHtml._instances[instanceName];
+        },
+
+        /**
+         * Stores the widget instance object.
+         *
+         * @param instance {Concepts.InformationTooltipHtml} the widget instance
+         * @param instanceName {String?} the widget instance identifier
+         * @private
+         */
+        _setInstance: function (instance, instanceName) {
+            if (typeof instanceName === "undefined") {
+                instanceName = ns.InformationTooltipHtml._defaultInstance;
+            }
+
+            ns.InformationTooltipHtml._instances[instanceName] = instance;
+        }
+    });
+
+    $.extend(ns.InformationTooltipHtml.prototype, {
+        _defaults: {
+            selectors: {
+                tooltipComponent: '.html-c-information-tooltip',
+                tooltipOnIos: '.ios .html-c-information-tooltip',
+                tooltipItemsFilter: '.html-is-info:not(.html-is-disabled), .html-is-valid:not(.html-is-disabled), .html-is-warning:not(.html-is-disabled), .html-is-invalid:not(.html-is-disabled)',
+                message: '.html-message',
+                ios: 'html.ios'
+            },
+            cssClasses: {
+                overlay: 'html-information-tooltip-overlay',
+                modifierInfo: 'html-is-info',
+                modifierValid: 'html-is-valid',
+                modifierWarning: 'html-is-warning',
+                modifierInvalid: 'html-is-invalid',
+                modifierDisabled: 'html-is-disabled',
+                modifierOn: 'html-is-message-on',
+                arrow: 'html-arrow',
+                positioning: 'html-has-position-'
+            },
+            templates: {
+                // we need to pass button to the jQuery UI JS
+                buttonInternal: '<button class="html-button html-close" title="Zavřít"><span class="html-text">Zavřít</span></button>'
+            },
+            pluginOptions: {},
+            animationDuration: '250',
+        },
+        options: {}, // constructed in _init()
+        eventNamespace: '.InformationTooltipHtml',
+
+        /**
+         * Creates the jQuery UI Tooltip plugin options object used internally by this component.
+         *
+         * The plugin configuration can be overridden using the options.pluginOptions object. Be aware, that
+         * callbacks in these options are invoked in the context of the tooltip not this module (i.e. this keyword
+         * points to the tooltip element not the component module)
+         *
+         * @private
+         */
+        _createPluginOptions: function () {
+            var module = this;
+            var options = module.options;
+            var selectors = options.selectors;
+            var cssClasses = options.cssClasses;
+            var templates = options.templates;
+            var animationDuration = module.options.animationDuration;
+
+            var pluginOptionDefaults = {
+                items: selectors.tooltipItemsFilter,
+                tooltipClass: cssClasses.overlay,
+                // with fade-out effect enabled, solve issue with animation finish - quick mouseovers
+                open: function (event, ui) {
+                    var $element = $(this);
+                    var $tooltip = ui.tooltip;
+                    var isInfo = $element.hasClass(cssClasses.modifierInfo);
+                    var isValid = $element.hasClass(cssClasses.modifierValid);
+                    var isWarning = $element.hasClass(cssClasses.modifierWarning);
+                    var isInvalid = $element.hasClass(cssClasses.modifierInvalid);
+                    $element.addClass(cssClasses.modifierOn);
+                    $tooltip.toggleClass(cssClasses.modifierInfo, isInfo);
+                    $tooltip.toggleClass(cssClasses.modifierValid, isValid);
+                    $tooltip.toggleClass(cssClasses.modifierWarning, isWarning);
+                    $tooltip.toggleClass(cssClasses.modifierInvalid, isInvalid);
+                },
+                close: function( event, ui ) {
+                    var $element = $(this);
+                    $element.removeClass(cssClasses.modifierOn);
+                },
+                position: {
+                    my: "right bottom",
+                    at: "center top",
+
+                    using: function (position, feedback) {
+                        var positionHorizontal;
+                        var positionVertical;
+
+                        var elementHorizontalCenterPosition = (feedback.element.left + (feedback.element.width / 2));
+                        var elementVerticalCenterPosition = (feedback.element.top + (feedback.element.height / 2));
+
+
+                        // Target
+                        var targetHorizontalCenterPosition = (feedback.target.left + (feedback.target.width / 2));
+                        var targetVerticalCenterPosition = (feedback.target.top + (feedback.target.height / 2));
+
+
+                        // Horizontal alignment
+                        if (elementHorizontalCenterPosition < targetHorizontalCenterPosition) {
+                            positionHorizontal = "left";
+                        } else if (elementHorizontalCenterPosition > targetHorizontalCenterPosition) {
+                            positionHorizontal = "right";
+                        }
+
+                        // Vertical alignment
+                        if (elementVerticalCenterPosition > targetVerticalCenterPosition) {
+                            positionVertical = "bottom";
+                        } else if ((elementVerticalCenterPosition < targetVerticalCenterPosition)) {
+                            positionVertical = "top";
+                        }
+
+                        $(this)
+                            .css(position)
+                            .addClass(cssClasses.positioning + positionVertical)
+                            .addClass(cssClasses.positioning + positionHorizontal);
+                        $('<div>')
+                            .addClass(cssClasses.arrow)
+                            .appendTo(this);
+                        $(templates.buttonInternal).appendTo(this);
+                    }
+                },
+                show: {
+                    duration: animationDuration,
+                    delay: 0
+                },
+                hide: {
+                    duration: animationDuration,
+                },
+                content: function () {
+                    var $element = $(this);
+                    var messageContent = $element.find(selectors.message).text();
+
+                    return $('<span>').text(messageContent).html();
+                }
+
+            };
+
+            return $.extend({}, pluginOptionDefaults, options.pluginOptions || {});
+        },
+
+        /**
+         * Init tooltip events
+         * - on hover, show tooltip
+         * - prevent display on click
+         *
+         * @param $scope {jQuery} jQuery object of the DOM fragment to initialize this component
+         * @private
+         */
+        _initEvents: function ($scope) {
+            var module = this;
+            var options = module.options;
+            var selectors = options.selectors;
+
+            var $tooltipIcon = $(selectors.tooltipComponent, $scope);
+            $tooltipIcon.tooltip($.extend({}, module._createPluginOptions()));
+            $tooltipIcon
+                .off('mouseover mouseout')
+                .off('mouseenter' + module.eventNamespace)
+                .on('mouseenter' + module.eventNamespace, function (event) {
+                    event.preventDefault();
+                    if(event.originalEvent) {
+                        // set flag for HTML close event net
+                        event.originalEvent._informationTooltipEvent = true;
+                    }
+                    var $tooltipElement = $(this);
+                    if ($tooltipElement.attr('aria-describedby')) {
+                        $tooltipElement.tooltip('close');
+                    } else {
+                        var originalTooltip = $tooltipElement.data('original-tooltip');
+                        $tooltipElement.attr('title', originalTooltip);
+                        $tooltipElement.tooltip('open').off('mouseleave focusout');
+                    }
+                    $tooltipElement.removeAttr('title');
+                })
+                // Hiding browser default tooltip on hover
+                .off('mouseover' + module.eventNamespace)
+                .on('mouseover' + module.eventNamespace, function() {
+                    var $tooltipElement = $(this);
+                    var originalTooltipTitle = $tooltipElement.attr('title');
+                    if(typeof originalTooltipTitle !== 'undefined') {
+                        $tooltipElement.data('original-tooltip', originalTooltipTitle);
+                        $tooltipElement.removeAttr('title');
+                    }
+                })
+                .off('blur' + module.eventNamespace  + ' mouseout' + module.eventNamespace)
+                .on('blur' + module.eventNamespace + ' mouseout' + module.eventNamespace, function () {
+                    var $tooltipElement = $(this);
+                    $tooltipElement.tooltip('close');
+                });
+        },
+
+        /**
+         * Close all tooltips on page.
+         *
+         * @private
+         */
+        _closeAllTooltips: function () {
+            var module = this;
+            var options = module.options;
+            var selectors = options.selectors;
+
+            var $componentsOnPage = $(selectors.tooltipComponent);
+            $componentsOnPage.tooltip('close');
+        },
+
+        /**
+         * Fixes several issues of tooltips on iOS and safari mobile
+         *
+         * @param $scope {jQuery} jQuery object of the DOM fragment to initialize this component
+         * @private
+         */
+        _initSafariMobileFixes: function ($scope) {
+            var module = this;
+            var options = module.options;
+            var selectors = options.selectors;
+
+            var $tooltipIconIos = $(selectors.tooltipOnIos, $scope);
+
+            if ($tooltipIconIos.length > 0) {
+                // fixing Safari Mobile bug - tooltips are not closing
+                $tooltipIconIos
+                    .off("mouseover mouseout")
+                    .off('click' + module.eventNamespace)
+                    .on('click' + module.eventNamespace, function (event) {
+                        $(this).tooltip('open');
+                        if(event.originalEvent) {
+                            // set flag for HTML close event net
+                            event.originalEvent._informationTooltipEvent = true;
+                        }
+                        event.preventDefault();
+                    });
+
+                // using touchstart event - click event is not bubbling correctly
+                // not scoped, as this is the top level event net
+                $(selectors.ios)
+                    .off('touchstart' + module.eventNamespace)
+                    .on('touchstart' + module.eventNamespace, function () {
+                            // must always find all tooltips on event execution on non-scoped events
+                            $(selectors.tooltipOnIos).tooltip('close');
+                        }
+                    );
+            }
+        },
+
+        /**
+         * Initializes the information tooltip component on a given DOM fragment.
+         *
+         * @param scope {String|jQuery|DOMElement} the DOM fragment to initialize this component in
+         */
+        init: function (scope) {
+            var module = this;
+
+            var $scope = $(scope);
+
+            module._initEvents($scope);
+            module._initSafariMobileFixes($scope);
+        }
+    });
+
+    // configure and run information tooltip on document ready
+    ns.EventDomReady.subscribe('gen1010Html', {}, function(e, fragment){
+        var widget = ns.InformationTooltipHtml;
+         if(typeof widget !== "undefined") {
+             var options = {};
+
+             widget.initWidget(options, fragment);
+         }
+    });
+})(window.PuiTheme, jQuery);

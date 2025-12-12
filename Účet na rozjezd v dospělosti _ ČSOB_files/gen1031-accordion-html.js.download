@@ -1,0 +1,330 @@
+// the semi-colon at the start is a safety net against concatenated
+// scripts and/or other plugins which may not be closed properly.
+;
+// Init Namespaces
+window.PuiTheme = window.PuiTheme || {};
+
+(function (ns, $) {
+    "use strict";
+
+    /**
+     * Component - GEN1031 Accordion script.
+     * Adds demonstration logic of component user interaction.
+     *
+     * Dependencies: jQuery
+     * 
+     * @param options {JSON} widget configuration options
+     *
+     * Configuration combination "allClosable = false" AND "multiOpen = true" is forbidden
+     *
+     * @constructor
+     */
+    ns.AccordionHtml = function(options) {
+        var module = this;
+
+        module._options = $.extend(true, {}, module._defaults, options || {});
+        // certain combination does not make sense, reconfigure it
+        if (module._options.allClosable === false && module._options.multiOpen === true) {
+            module._options.allClosable = true;
+        }
+    };
+    
+    /**
+     * Widget static init methods
+     */
+    $.extend(ns.AccordionHtml, {
+        _instances: {},
+        _defaultInstance: '_default',
+
+        /**
+         * Initializes the widget.
+         * If an instance with the given name does not exist, creates an instance with the given configuration.
+         * Executes the widget initialization on the specified DOM fragment.
+         *
+         * @param options {JSON} widget configuration options
+         * @param fragment {String|jQuery|DOMElement} the DOM fragment selector, jQuery object or DOM element
+         * @param instanceName {String?} the widget instance identifier
+         */
+        initWidget: function (options, fragment, instanceName) {
+            var instance = ns.AccordionHtml._getInstance(instanceName);
+
+            if (typeof instance === "undefined") {
+                instance = new ns.AccordionHtml(options);
+                ns.AccordionHtml._setInstance(instance, instanceName);
+            }
+
+            instance.init(fragment);
+            return instance;
+        },
+
+        /**
+         * Returns the widget instance object.
+         * May return undefined if not yet initialized.
+         *
+         * @param instanceName {String?} the widget instance identifier
+         * @return {undefined|PuiTheme.AccordionHtml} widget instance
+         * @private
+         */
+        _getInstance: function (instanceName) {
+            if (typeof instanceName === "undefined") {
+                instanceName = ns.AccordionHtml._defaultInstance;
+            }
+
+            return ns.AccordionHtml._instances[instanceName];
+        },
+
+        /**
+         * Stores the widget instance object.
+         *
+         * @param instance {PuiTheme.AccordionHtml} the widget instance
+         * @param instanceName {String?} the widget instance identifier
+         * @private
+         */
+        _setInstance: function (instance, instanceName) {
+            if (typeof instanceName === "undefined") {
+                instanceName = ns.AccordionHtml._defaultInstance;
+            }
+
+            ns.AccordionHtml._instances[instanceName] = instance;
+        }
+    });
+
+    $.extend(ns.AccordionHtml.prototype, {
+        _defaults: {
+            selectors: {
+                html: 'html',
+                component: '.html-c-accordion',
+                accordionItem: '.html-b-accordion-item',
+                accordionItemHeading: '.html-b-accordion-item-heading',
+                accordionItemContent: '.html-b-accordion-item-content'
+            },
+            cssClasses: {
+                isExpanded: 'html-is-expanded',
+                isCollapsed: 'html-is-collapsed',
+                isClosable: "html-is-closable"
+            },
+            allClosable: true,
+            multiOpen: false,
+            initiallyOpenedItems: [],
+            closingActionRecentlyTriggered: false
+        },
+        _options: {}, // constructed in ns.AccordionHtml()
+        _eventNamespace: '.AccordionHtml',
+
+        /**
+         * Init Accordion events.
+         * - display / hide additional content below Accordion headings
+         *
+         * @param $fragment {jQuery} jQuery object of the DOM fragment to initialize this component
+         * @private
+         */
+        _initEvents: function ($fragment) {
+            var module = this;
+
+            module._initMouseEvents($fragment);
+            module._initKeyboardEvents($fragment);
+            module._initFocusEvents($fragment);
+        },
+
+        /**
+         * Adds inside markup attributes and classes to turn default markup into element usable as accordion.
+         * For example: adds tabindex or classes reflecting component`s initial setting
+         *
+         * @param $fragment {jQuery} instance of component to init on
+         * @private
+         */
+        _initMarkupEnhancement: function ($fragment) {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+            var classes = options.cssClasses;
+            var itemsToBeOpenedOnInit = options.multiOpen ? options.initiallyOpenedItems : options.initiallyOpenedItems.slice(0, 1);
+
+            var $items = $fragment.children(selectors.accordionItem);
+            var $itemHeadings = $items.children(selectors.accordionItemHeading);
+
+            // close or open panels according to component`s settings
+            $items.each(function (index, accordionItem) {
+                var $accordionItem = $(accordionItem);
+
+                itemsToBeOpenedOnInit.indexOf(index + 1) >= 0
+                    ? $accordionItem.addClass(classes.isExpanded)
+                    : $accordionItem.removeClass(classes.isExpanded).addClass(classes.isCollapsed);
+            });
+
+            // if component cannot be completely closed and is not specified which item should be opened, then open the first item
+            if (!options.allClosable && !options.initiallyOpenedItems.length) {
+                $items.eq(0).removeClass(classes.isCollapsed).addClass(classes.isExpanded);
+            }
+
+            if (options.allClosable) {
+                $fragment.addClass(classes.isClosable);
+            }
+
+            $itemHeadings.attr("tabindex", 0);
+        },
+
+        /**
+         * Initiates events on mouse actions
+         *
+         * @param $componentInstance {jQuery} instance of component to init on
+         * @private
+         */
+        _initMouseEvents: function ($componentInstance) {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+
+            var $headingElement = $componentInstance.children(selectors.accordionItem).children(selectors.accordionItemHeading);
+
+            $headingElement
+                .off('mousedown' + module._eventNamespace)
+                .on('mousedown' + module._eventNamespace, function () {
+                    module._toggleItemVisibility($componentInstance, this);
+                })
+        },
+
+        /**
+         * Initiates events on keyboard actions
+         *
+         * @param $componentInstance {jQuery} instance of component to init on
+         * @private
+         */
+        _initKeyboardEvents: function ($componentInstance) {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+
+            var $headingElements = $componentInstance.children(selectors.accordionItem).children(selectors.accordionItemHeading);
+            var headingsArray = Array.prototype.slice.call($headingElements);
+
+            $headingElements
+                .off('keyup' + module._eventNamespace)
+                .on('keyup' + module._eventNamespace, function (e) {
+                    if ((e.which === $.ui.keyCode.ENTER) || (e.which === $.ui.keyCode.SPACE)) {
+                        module._toggleItemVisibility($componentInstance, this);
+                    }
+
+                    if ((e.which === $.ui.keyCode.UP) ||
+                            (e.which === $.ui.keyCode.RIGHT) ||
+                            (e.which === $.ui.keyCode.DOWN) ||
+                            (e.which === $.ui.keyCode.LEFT)) {
+                        var index = headingsArray.indexOf(e.target);
+                        var direction = (e.which === $.ui.keyCode.RIGHT) || (e.which === $.ui.keyCode.DOWN) ? 1 : -1;
+                        var length = $headingElements.length;
+                        var newIndex = (index + length + direction) % length;
+
+                        $headingElements[newIndex].focus();
+                    }
+                });
+        },
+
+        /**
+         * Handles actions on focus inside component
+         *
+         * @param $componentInstance {jQuery} instance of component to init on
+         * @private
+         */
+        _initFocusEvents: function ($componentInstance) {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+            var classes = options.cssClasses;
+            var $item = $componentInstance.children(selectors.accordionItem);
+
+            $item
+                .off('focusin')
+                .on('focusin', function (e) {
+                    var $itemParent = $(e.target).parents(selectors.accordionItem);
+
+                    if (!module._options.closingActionRecentlyTriggered) {
+                        if (!$itemParent.eq(0).hasClass(classes.isExpanded)) {
+                            // var itemHeading is first <H.> tag in Accordion Item header
+                            var itemHeading = $itemParent.children(selectors.accordionItemHeading).eq(0).children(":header")[0];
+                            module._trackItemExpanded(itemHeading);
+                        }
+
+                        $itemParent.removeClass(classes.isCollapsed).addClass(classes.isExpanded);
+                    } else {
+                        module._options.closingActionRecentlyTriggered = false;
+                    }
+
+                    if (!module._options.multiOpen) {
+                        module._collapseAllOtherItems($itemParent);
+                    }
+                });
+        },
+
+        /**
+         * Handles toggle of classes defining visibility of Accordion item
+         *
+         * @param $accordionComponent {jQuery} jQuery object of Accordion component
+         * @param headingElement {DOMElement} DOM element of Accordion item heading triggering this function
+         */
+        _toggleItemVisibility: function ($accordionComponent, headingElement) {
+            var module = this;
+            var selectors = module._options.selectors;
+            var classes = module._options.cssClasses;
+            var $clickedHeading = $(headingElement);
+            var $affectedItem = $clickedHeading.parent(selectors.accordionItem);
+
+            if ($affectedItem.hasClass(classes.isCollapsed)) {
+
+                if (!module._options.multiOpen) {
+                    module._collapseAllOtherItems($affectedItem);
+                }
+
+                $affectedItem.removeClass(classes.isCollapsed).addClass(classes.isExpanded);
+                module._trackItemExpanded(headingElement);
+            } else if (module._options.allClosable) {
+                $affectedItem.removeClass(classes.isExpanded).addClass(classes.isCollapsed);
+                module._options.closingActionRecentlyTriggered = true;
+            }
+        },
+
+        /**
+         * Hides all expanded sibling Accordion Items except Accordion Item triggering this action
+         *
+         * @param $affectedItem {jQuery} jQuery object of Accordion Item triggering this action
+         */
+        _collapseAllOtherItems: function ($affectedItem) {
+            var module = this;
+            var selectors = module._options.selectors;
+            var classes = module._options.cssClasses;
+            $affectedItem.siblings(selectors.accordionItem).removeClass(classes.isExpanded).addClass(classes.isCollapsed);
+        },
+
+
+        /**
+         * Send Digital tracking information
+         *
+         * @param {Object} itemHeader DOM element
+         * @private
+         */
+        _trackItemExpanded: function (itemHeader) {
+            var trackingData = {
+                action: "contentExpanded",
+                anchorText: itemHeader.textContent.trim()
+            };
+
+            // notify tracking API
+            if (typeof window.measure === "function") {
+                window.measure(trackingData);
+            }
+        },
+
+        /**
+         * Initializes the component on a given DOM fragment.
+         *
+         * @param fragment {String|jQuery|DOMElement} the DOM fragment to initialize this component in
+         */
+        init: function (fragment) {
+            var module = this;
+
+            var $fragment = $(fragment);
+
+            module._initMarkupEnhancement($fragment);
+            module._initEvents($fragment);
+        }
+    });
+})(window.PuiTheme, jQuery);

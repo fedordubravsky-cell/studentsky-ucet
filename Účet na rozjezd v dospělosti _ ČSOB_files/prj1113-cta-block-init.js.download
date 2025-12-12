@@ -1,0 +1,24 @@
+// the semi-colon at the start is a safety net against concatenated
+// scripts and/or other plugins which may not be closed properly.
+;
+// Init Namespaces
+window.PuiTheme = window.PuiTheme || {};
+
+/**
+ * Component - PRJ1113: CTA block
+ *
+ * Dependencies: cat-event-dom-ready.js, cta-block.js
+ *
+ * @version 1.0
+ */
+(function (ns) {
+    "use strict";
+
+    ns.EventDomReady.subscribe('CtaBlockHtml', {}, function (e, fragment) {
+        var widget = ns.CtaBlockHtml;
+        if (typeof widget !== "undefined") {
+            var options = {};
+            widget.initWidget(options, fragment);
+        }
+    });
+})(window.PuiTheme);

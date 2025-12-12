@@ -1,0 +1,121 @@
+/**
+ * Observable object, allows to:
+ * - subscribe to custom event via provided handler
+ * - unsubscribe previously subscribed handler
+ * - trigger custom event with data to be passed to subscribed handlers
+ *
+ * Dependencies: jQuery
+ *
+ * @version 1.0
+ */
+
+// Theme Namespace
+window.PuiTheme = window.PuiTheme || {};
+
+/**
+ * Function to be passed as CIM FS event handler
+ *
+ * @callback puiEventHandler
+ * @param {Object} [data]
+ */
+
+(function (ns,  $) {
+    "use strict";
+
+    /**
+     * PuiObservable constructor
+     *
+     * @param {Object} options initialization options
+     * @constructor
+     * @see PuiObservable#_defaults
+     */
+    ns.PuiObservable = function (options) {
+        this._init(options);
+    };
+
+    $.extend(ns.PuiObservable.prototype, {
+        /**
+         * Default options for the PuiObservable object.
+         *
+         * @private
+         */
+        _defaults: {},
+
+        /**
+         * Initializes the widget using the supplied options.
+         *
+         * @param {Object} options initialization options
+         * @see PuiObservable#_defaults
+         * @private
+         */
+        _init: function (options) {
+            const module = this;
+
+            module._options = $.extend(true, {}, module._defaults, options || {});
+            module._eventHandlers = {};
+        },
+
+        /**
+         * Adds handler to handlers table
+         *
+         * @param {string} eventName
+         * @param {puiEventHandler} handler
+         * @public
+         */
+        subscribe: function (eventName, handler) {
+            const module = this;
+            const eventHandlers = module._eventHandlers;
+
+            if (!eventHandlers.hasOwnProperty(eventName)) {
+                eventHandlers[eventName] = [];
+            }
+
+            if (eventHandlers[eventName].indexOf(handler) === -1) {
+                eventHandlers[eventName].push(handler);
+            }
+        },
+
+        /**
+         * Removes handler from handlers table
+         *
+         * @param {string} eventName
+         * @param {puiEventHandler} handler
+         * @public
+         */
+        unsubscribe: function (eventName, handler) {
+            const module = this;
+            const eventHandlers = module._eventHandlers;
+
+            if (eventHandlers.hasOwnProperty(eventName)) {
+                const itemIndex = eventHandlers[eventName].indexOf(handler);
+
+                if (itemIndex !== -1) {
+                    eventHandlers[eventName].splice(itemIndex, 1);
+                }
+            }
+        },
+
+        /**
+         * Calls all handlers associated with event name
+         *
+         * @param {string} eventName
+         * @param {Object} data
+         * @public
+         */
+        dispatch: function (eventName, data) {
+            const module = this;
+            const eventHandlers = module._eventHandlers;
+
+            if (eventHandlers.hasOwnProperty(eventName)) {
+                eventHandlers[eventName].forEach(function (eventHandler) {
+                        eventHandler(data);
+                    }
+                );
+            }
+        }
+    });
+
+    // Create default observable object
+    window.puiObservable = new ns.PuiObservable({});
+
+})(window.PuiTheme, jQuery);

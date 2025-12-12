@@ -1,0 +1,272 @@
+/**
+ * PUI breadcrumbs js
+ *
+ * Dependencies: jQuery
+ *
+ * @version 1.0.0
+ *
+ * the semi-colon at the start is a safety net against concatenated
+ * scripts and/or other plugins which may not be closed properly.
+ */
+
+/**
+ * JS namespace init
+ * @type {{}|*}
+ */
+window.PuiTheme = window.PuiTheme || {};
+
+
+(function (ns, $) {
+    "use strict";
+
+    /**
+     * Constructor for component
+     * @constructor
+     */
+
+    ns.PuiBreadcrumbs = function (options) {
+        var widget = this;
+        widget._init(options);
+    };
+
+    $.extend(ns.PuiBreadcrumbs.prototype, {
+        /**
+         *  In _defaults are selectors, cssClasses, data attributes and etc. for functionality components
+         * .PuiEventNamespace is as example. You can rename for specific event
+         */
+        _defaults: {
+            // selectors
+            selectors: {
+                nav: '.pui-m-breadcrumbs',
+                component: '.pui-m-breadcrumbs .html-b-breadcrumbs-list',
+                items: '.html-b-breadcrumb-item'
+            },
+            // css classes
+            cssClasses: {
+                hidden: 'pui-hidden',
+                collapsed: 'pui-collapsed',
+                active: 'pui-active',
+                inactive: 'pui-inactive',
+                last: 'pui-last'
+            },
+            resourceMessages: {
+                dividerTitle: '...',
+                dividerAria: '...'
+            },
+            elements: {
+                divider: '<li class="html-b-breadcrumb-divider"><a href="#"><span>&#8230;</span></a></li>'
+            },
+            index: {
+                startIndex: 1 // start index dot divider (...). Default is 1. Divider is insert before item 2 item, after homepage
+            }
+        },
+        _generatedDivider: false,
+        _startIndex: false,
+        _options: {}, // constructed in _init()
+        _eventNamespace: '.PuiEventBreadcrumbs', // Event namespace for events
+
+        /**
+         * Scans for the breadcrumbs components and binds the required events.
+         *
+         * @private
+         */
+        _initComponentsOnPage: function () {
+            var module = this;
+            var options = module._options;
+            var index = options.index;
+
+            var startIndex = index.startIndex;
+
+            var $nav = $(options.selectors.nav);
+            $nav.attr({"role": "navigation"});
+
+            var $breadcrumbs = $(options.selectors.component);
+            $breadcrumbs.each(function (index, component) {
+                var $component = $(component);
+
+                module._breadcrumbsDotDivider(startIndex, $component);
+                module._breadcrumbsShort(startIndex, $component);
+
+                var resizeTimer = null;
+
+                $(window)
+                    .off("resize" + module._eventNamespace + index)
+                    .on("resize" + module._eventNamespace + index, function () {
+                        // delayed resize
+                        if (!resizeTimer) {
+                            resizeTimer = setTimeout(function () {
+                                module._breadcrumbsShort(startIndex, $component);
+                                resizeTimer = null;
+                            }, 500);
+                        }
+                    });
+
+                module._breadcrumbsShowAllItems($component);
+            });
+        },
+
+        /**
+         * _init
+         * @param options
+         * @private
+         */
+        _init: function (options) {
+            /**
+             * @type {ns.PuiBreadcrumbs}
+             */
+            var module = this;
+            module._options = $.extend({}, module._defaults, options || {});
+            module._initComponentsOnPage(); // init function
+        },
+
+        /**
+         * Breadcrumbs shorting if viewport is smallest then breadcrumbs.
+         *
+         * @param startIndex {Number} how many items should always be shown at the beginning
+         * @param $component {jQuery} the breadcrumb component
+         * @private
+         */
+        _breadcrumbsShort: function (startIndex, $component) {
+
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+            var cssClasses = options.cssClasses;
+
+            var breadcrumbsWidthMax = $component.width();
+            var $breadcrumbsItems = $component.find(selectors.items);
+            var breadcrumbsItemsCount = $breadcrumbsItems.length;
+            var $breadcrumbsItemLast = $breadcrumbsItems.last();
+            var $dividerDot = $component.find('.html-b-breadcrumb-divider');
+
+            var breadcrumbsItemsWidth = 0;
+            var hiddenItemCount = 0;
+            var shortIsActive = false;
+
+            // count already occupated space
+            // 1) home item
+            for (var it = 1; it <= startIndex; it++) {
+                // it-1: Zero indexed array
+                var $itemFromStart = $breadcrumbsItems.eq(it - 1);
+                breadcrumbsItemsWidth += $itemFromStart.outerWidth(true);
+            }
+
+            $breadcrumbsItems.removeClass(cssClasses.hidden);
+
+            for (var i = breadcrumbsItemsCount; i > startIndex; i--) {
+
+                // i-1: Zero indexed array
+                var $item = $breadcrumbsItems.eq(i - 1);
+
+                var itemWidth = $item.outerWidth(true);
+                breadcrumbsItemsWidth += itemWidth;
+                if (breadcrumbsItemsWidth > breadcrumbsWidthMax) {
+                    // remove last item width (so we can check divider later)
+                    breadcrumbsItemsWidth -= itemWidth;
+
+                    shortIsActive = true;
+                    hiddenItemCount = i - startIndex;
+
+                    break;
+                } else {
+                    $component.removeClass(cssClasses.collapsed);
+                    $dividerDot
+                        .removeClass(cssClasses.active)
+                        .addClass(cssClasses.inactive)
+                        .children('a').attr({"tabindex":"-1"});
+                }
+            }
+
+            // Shorting breadcrumbs
+            if (shortIsActive) {
+                $dividerDot
+                    .removeClass(cssClasses.inactive)
+                    .addClass(cssClasses.active)
+                    .children('a').removeAttr("tabindex");
+
+                breadcrumbsItemsWidth += $dividerDot.outerWidth(true);
+                if (breadcrumbsItemsWidth > breadcrumbsWidthMax) {
+                    hiddenItemCount++;
+                }
+
+                for (var j = 1; j <= hiddenItemCount; j++) {
+                    // j-1: Zero indexed array
+                    var $itemToHide = $breadcrumbsItems.eq(startIndex + j - 1);
+                    $itemToHide.addClass(cssClasses.hidden);
+                    $itemToHide.children('a').attr({"tabindex":"-1"});
+                    $breadcrumbsItemLast.removeClass(cssClasses.hidden);
+                }
+
+                $component.addClass(cssClasses.collapsed);
+                $component.attr({"aria-expanded": "false"});
+            }
+        },
+
+        /**
+         * Shows all breadcrumb items for the given breadcrumb component.
+         *
+         * @param $component {jQuery} the breadcrumb component
+         * @private
+         */
+        _breadcrumbsShowAllItems: function ($component) {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+            var cssClasses = options.cssClasses;
+
+            var $breadcrumbsItems = $component.find(selectors.items);
+
+            $component.find(".html-b-breadcrumb-divider")
+                .off('click' + module._eventNamespace)
+                .on('click' + module._eventNamespace, function (e) {
+                    var $divider = $(this);
+                    $divider
+                        .removeClass(cssClasses.active)
+                        .addClass(cssClasses.inactive)
+                        .children('a').attr({"tabindex":"-1"});
+
+                    $breadcrumbsItems.removeClass(cssClasses.hidden);
+                    $component.removeClass(cssClasses.collapsed);
+                    $component.attr({"aria-expanded": "true"});
+                    e.preventDefault();
+                    $breadcrumbsItems.children('a').removeAttr("tabindex");
+                });
+        },
+
+        /**
+         * Inserts a generated breadcrumbs expand toggler after the last visible item from the beginning.
+         *
+         * @param startIndex {Number} how many items should always be shown at the beginning
+         * @param $component {jQuery} the breadcrumb component
+         * @private
+         */
+        _breadcrumbsDotDivider: function (startIndex, $component) {
+            /**
+             * @type {ns.PuiBreadcrumbs}
+             */
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+            var cssClasses = options.cssClasses;
+            var elements = options.elements;
+            var resourceMessages = options.resourceMessages;
+
+            var $breadcrumbsItems = $component.find(selectors.items);
+            var $dividerDot = $(elements.divider);
+
+            $dividerDot.attr({
+                'title': resourceMessages.dividerTitle,
+                'aria-label': resourceMessages.dividerAria
+            });
+
+            if (!$component.data("_generatedDivider")) {
+                var startIndexItem = $breadcrumbsItems.eq(startIndex);
+                $dividerDot
+                    .removeClass(cssClasses.active)
+                    .addClass(cssClasses.inactive);
+                startIndexItem.before($dividerDot);
+                $component.data("_generatedDivider", true);
+            }
+        }
+    });
+})(window.PuiTheme, jQuery);

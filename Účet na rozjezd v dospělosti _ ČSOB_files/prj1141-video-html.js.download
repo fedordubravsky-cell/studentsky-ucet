@@ -1,0 +1,434 @@
+// the semi-colon at the start is a safety net against concatenated
+// scripts and/or other plugins which may not be closed properly.
+;
+// Init Namespaces
+window.PuiTheme = window.PuiTheme || {};
+
+(function (ns, $) {
+    "use strict";
+
+    /**
+     * Component - prj1141 Video script.
+     * Adds demonstration logic of component user interaction.
+     *
+     * Dependencies: jQuery
+     *
+     * @param options {JSON} widget configuration options
+     *
+     * @constructor
+     */
+    ns.VideoHtml = function (options) {
+        var module = this;
+
+        module._options = $.extend(true, {}, module._defaults, options || {});
+    };
+
+    /**
+     * Widget static init methods
+     */
+    $.extend(ns.VideoHtml, {
+        _instances: {},
+        _defaultInstance: '_default',
+
+        /**
+         * Initializes the widget.
+         * If an instance with the given name does not exist, creates an instance with the given configuration.
+         * Executes the widget initialization on the specified DOM fragment.
+         *
+         * @param options {JSON} widget configuration options
+         * @param fragment {String|jQuery|DOMElement} the DOM fragment selector, jQuery object or DOM element
+         * @param instanceName {String?} the widget instance identifier
+         */
+        initWidget: function (options, fragment, instanceName) {
+            var instance = ns.VideoHtml._getInstance(instanceName);
+
+            if (typeof instance === "undefined") {
+                instance = new ns.VideoHtml(options);
+                ns.VideoHtml._setInstance(instance, instanceName);
+            }
+
+            instance.init(fragment);
+            return instance;
+        },
+
+        /**
+         * Returns the widget instance object.
+         * May return undefined if not yet initialized.
+         *
+         * @param instanceName {String?} the widget instance identifier
+         * @return {undefined|PuiTheme.VideoHtml} widget instance
+         * @private
+         */
+        _getInstance: function (instanceName) {
+            if (typeof instanceName === "undefined") {
+                instanceName = ns.VideoHtml._defaultInstance;
+            }
+
+            return ns.VideoHtml._instances[instanceName];
+        },
+
+        /**
+         * Stores the widget instance object.
+         *
+         * @param instance {PuiTheme.VideoHtml} the widget instance
+         * @param instanceName {String?} the widget instance identifier
+         * @private
+         */
+        _setInstance: function (instance, instanceName) {
+            if (typeof instanceName === "undefined") {
+                instanceName = ns.VideoHtml._defaultInstance;
+            }
+
+            ns.VideoHtml._instances[instanceName] = instance;
+        }
+    });
+
+    $.extend(ns.VideoHtml.prototype, {
+        _defaults: {
+            selectors: {
+                html: 'html',
+                component: '.html-c-video',
+                video: '.html-video',
+                videoItem: '.html-b-video-item',
+                videoItemHeading: '.html-b-video-item-heading',
+                videoItemContent: '.html-b-video-item-content',
+                loadingIndicator: '.html-c-loading-indicator',
+                error: '.html-b-error'
+            },
+            cssClasses: {
+                inProgress: 'html-is-in-progress',
+                hasError: 'html-has-error'
+            }
+        },
+        _options: {}, // constructed in ns.VideoHtml()
+        _eventNamespace: '.VideoHtml',
+
+        /**
+         * Init Video events.
+         *
+         * @param $fragment {jQuery} jQuery object of the DOM fragment to initialize this component
+         * @private
+         */
+        _initEvents: function ($fragment) {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+
+            module._initVideoEvents($fragment);
+            module._initVideoSourcesEvents($fragment);
+            module._initVideoEventsExternal($fragment);
+        },
+        /**
+         * Read data attributes from markup
+         *
+         * @param $componentInstance
+         * @private
+         */
+        _getDataAttributes: function ($componentInstance) {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+
+            return $componentInstance.data();
+        },
+        /**
+         * Adds inside markup attributes and classes to turn default markup into element usable as video.
+         * For example: adds tabindex or classes reflecting component`s initial setting
+         *
+         * @param $fragment {jQuery} instance of component to init on
+         * @private
+         */
+        _initMarkupEnhancement: function ($componentInstance) {
+            var module = this;
+
+            var $video = $componentInstance;
+
+            var loadingIndicator = "<div class='html-component html-c-loading-indicator'><div class='html-indicator'></div></div>";
+
+            $video.prepend(loadingIndicator);
+        },
+        /**
+         * Initiates video events
+         *
+         * @param $componentInstance {jQuery} instance of component to init on
+         * @private
+         */
+        _initVideoEvents: function ($componentInstance) {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+            var classes = options.cssClasses;
+
+            var video = $componentInstance[0];
+            var videoElement = $(selectors.video, $componentInstance)[0];
+            var videoId = video.id;
+            var $loadingIndicator = $componentInstance.find(selectors.loadingIndicator);
+
+            //============ NATIVE EVENT LISTENERS ==================//
+            //======================================================//
+            // TODO MBU: always add all event listeners or toggle them from outside?
+            // TODO MBU: use native js EventListeners?
+
+            videoElement.addEventListener('error', errorEvent);
+            videoElement.addEventListener('play', playEvent);
+            videoElement.addEventListener('playing', playingEvent);
+            videoElement.addEventListener('timeupdate', timeUpdateEvent);
+            videoElement.addEventListener('ended', emitEndedEvent);
+            videoElement.addEventListener('canplay', canPlayEvent);
+            videoElement.addEventListener('canplaythrough', canPlayThroughEvent);
+            videoElement.addEventListener('loadstart', loadStartEvent);
+            videoElement.addEventListener('waiting', waitingEvent);
+            videoElement.addEventListener('stalled', stalledEvent);
+            videoElement.addEventListener('durationchange', durationChangeEvent);
+
+            //============ NATIVE EVENTS FUNCTIONS =================//
+            //======================================================//
+            // TODO MBU: use these custom events?
+            // TODO MBU: don't always emit data? Optional? Always evaluate data attributes?
+            //  Or should the component watch data attributes and keep them internally?
+
+            function errorEvent(event) {
+                $componentInstance.trigger("errorEvent" + module._eventNamespace, {
+                    videoId: videoId,
+                    data: module._getDataAttributes($componentInstance),
+                    event: event
+                });
+
+                module._createError($componentInstance);
+                $loadingIndicator.removeClass(classes.inProgress);
+            }
+
+            function playEvent(event) {
+                $componentInstance.trigger("playEvent" + module._eventNamespace, {
+                    videoId: videoId,
+                    data: module._getDataAttributes($componentInstance),
+                    event: event
+                });
+            }
+
+            function playingEvent(event) {
+                $componentInstance.trigger("playingEvent" + module._eventNamespace, {
+                    videoId: videoId,
+                    data: module._getDataAttributes($componentInstance),
+                    event: event
+                });
+
+                $loadingIndicator.removeClass(classes.inProgress);
+            }
+
+            function waitingEvent(event) {
+                $componentInstance.trigger("waitingEvent" + module._eventNamespace, {
+                    videoId: videoId,
+                    data: module._getDataAttributes($componentInstance),
+                    event: event
+                });
+
+                $loadingIndicator.addClass(classes.inProgress);
+            }
+
+            function stalledEvent(event) {
+                $componentInstance.trigger("stalledEvent" + module._eventNamespace, {
+                    videoId: videoId,
+                    data: module._getDataAttributes($componentInstance),
+                    event: event
+                });
+
+                $loadingIndicator.addClass(classes.inProgress);
+            }
+
+            function timeUpdateEvent(event) {
+                $componentInstance.trigger("timeUpdateEvent" + module._eventNamespace, {
+                    videoId: videoId,
+                    currentTime: videoElement.currentTime,
+                    data: module._getDataAttributes($componentInstance),
+                    event: event
+                });
+            }
+
+            function emitEndedEvent(event) {
+                $componentInstance.trigger("endedEvent" + module._eventNamespace, {
+                    videoId: videoId,
+                    data: module._getDataAttributes($componentInstance),
+                    event: event
+                });
+            }
+
+            function canPlayEvent(event) {
+                $componentInstance.trigger("canPlayEvent" + module._eventNamespace, {
+                    videoId: videoId,
+                    data: module._getDataAttributes($componentInstance),
+                    event: event
+                });
+
+                // TODO MBU: check if video is waiting in order not to cancel
+                //  loading indicator triggered by different event?
+                $loadingIndicator.removeClass(classes.inProgress);
+            }
+
+            function canPlayThroughEvent(event) {
+                $componentInstance.trigger("canPlayThroughEvent" + module._eventNamespace, {
+                    videoId: videoId,
+                    data: module._getDataAttributes($componentInstance),
+                    event: event
+                });
+            }
+
+            // NOTE: this event is not registered on page load, because js of component is initialized
+            // after the event occured
+            function loadStartEvent(event) {
+                $componentInstance.trigger("loadStartEvent" + module._eventNamespace, {
+                    videoId: videoId,
+                    data: module._getDataAttributes($componentInstance),
+                    event: event
+                });
+
+                $loadingIndicator.addClass(classes.inProgress);
+            }
+
+            function durationChangeEvent(event) {
+                $componentInstance.trigger("durationChangeEvent" + module._eventNamespace, {
+                    videoId: videoId,
+                    data: module._getDataAttributes($componentInstance),
+                    event: event
+                });
+            }
+        },
+        /**
+         * Initiates video events on sources
+         * it is added on last source only, because the previous ones are allowed to fail
+         *
+         * @param $componentInstance {jQuery} instance of component to init on
+         * @private
+         */
+        _initVideoSourcesEvents: function ($componentInstance) {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+            var classes = options.cssClasses;
+
+            var $videoSources = $componentInstance.find('source');
+            var $videoObject = $componentInstance;
+            var videoId = $videoObject.attr('id');
+
+            // event
+            $videoSources.last().on('error', errorEvent);
+
+            function errorEvent(event) {
+                $componentInstance.trigger("errorEvent" + module._eventNamespace, {
+                    videoId: videoId,
+                    data: module._getDataAttributes($componentInstance),
+                    event: event
+                });
+                module._createError($componentInstance);
+            }
+        },
+        /**
+         * Creates markup for error if none is defined
+         *
+         * @param $componentInstance {jQuery} instance of component to init on
+         * @private
+         */
+        _createError: function ($componentInstance) {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+            var classes = options.cssClasses;
+
+            var $video = $componentInstance;
+            $video.addClass(classes.hasError);
+
+            var error = $componentInstance.find(selectors.error);
+
+            // if error is not specifically defined, create markup
+            if (!error) {
+                var errorContent = "<div class='html-b-error'></div>";
+                $video.prepend(errorContent);
+            }
+        },
+
+        /**
+         * Initiates video events external (custom events triggered on component wrapper)
+         *
+         * @param $componentInstance {jQuery} instance of component to init on
+         * @private
+         */
+        _initVideoEventsExternal: function ($componentInstance) {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+            var classes = options.cssClasses;
+
+            var $videoObject = $componentInstance;
+            var videoElement = $componentInstance.find(selectors.video)[0];
+            var videoId = $videoObject.attr('id');
+            var $loadingIndicator = $componentInstance.find(selectors.loadingIndicator);
+
+            //============ CUSTOM EVENTS (EXTERNAL CONTROL) ========//
+            //======================================================//
+            $componentInstance
+                .off('play' + module._eventNamespace)
+                .on('play' + module._eventNamespace, function (event, eventData) {
+                    if (!$videoObject.hasClass(classes.hasError)) {
+                        if (eventData.timestamp || eventData.timestamp === 0) {
+                            if (eventData.timestamp !== 0) {
+                                videoElement.currentTime = eventData.timestamp / 1000;
+                            } else {
+                                videoElement.currentTime = eventData.timestamp;
+                            }
+                        }
+
+                        // TODO MBU: if video is not loaded at all, start loading indicator
+                        if (videoElement.readyState === 0) {
+                            $loadingIndicator.addClass(classes.inProgress);
+                        }
+
+                        videoElement.play();
+                    }
+                })
+                .off('pause' + module._eventNamespace)
+                .on('pause' + module._eventNamespace, function (event, eventData) {
+                    videoElement.pause();
+                })
+                .off('stop' + module._eventNamespace)
+                .on('stop' + module._eventNamespace, function (event, eventData) {
+                    videoElement.currentTime = 0;
+                    videoElement.pause();
+                })
+                .off('startPreload' + module._eventNamespace)
+                .on('startPreload' + module._eventNamespace, function (event, eventData) {
+                    if (videoElement.preload !== 'auto') {
+                        videoElement.preload = 'auto';
+
+                        // WORKAROUND: IE11 and Edge does not watch preload prop for change
+                        // trigger preload with play and pause
+                        var isIE11 = (/Trident.*rv\:11\./i.test(navigator.userAgent));
+                        var isEdge = (/Edge\/\d./i.test(navigator.userAgent));
+
+                        if (isIE11 || isEdge) {
+                            videoElement.play();
+                            videoElement.pause();
+                        }
+                    }
+
+                    $componentInstance.trigger("preloadEvent" + module._eventNamespace, {
+                        videoId: videoId,
+                        data: module._getDataAttributes($componentInstance),
+                        preload: 'auto'
+                    });
+                });
+        },
+        /**
+         * Initializes the component on a given DOM fragment.
+         *
+         * @param fragment {String|jQuery|DOMElement} the DOM fragment to initialize this component in
+         */
+        init: function (fragment) {
+            var module = this;
+
+            var $fragment = $(fragment);
+
+            module._initMarkupEnhancement($fragment);
+            module._initEvents($fragment);
+        }
+    });
+})(window.PuiTheme, jQuery);

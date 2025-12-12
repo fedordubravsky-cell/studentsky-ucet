@@ -1,0 +1,322 @@
+// the semi-colon at the start is a safety net against concatenated
+// scripts and/or other plugins which may not be closed properly.
+;
+// Init Namespaces
+window.PuiTheme = window.PuiTheme || {};
+
+(function (ns, $) {
+    "use strict";
+
+    /**
+     * Component - PRJ1113: CTA block
+     *
+     * Dependencies: jQuery
+
+     * @param options {JSON} widget configuration options
+     * @constructor
+     */
+    ns.CtaBlockHtml = function (options) {
+        var module = this;
+
+        module._options = $.extend({}, module._defaults, options || {});
+    };
+
+    /**
+     * Widget static init methods
+     */
+    $.extend(ns.CtaBlockHtml, {
+        _instances: {},
+        _defaultInstance: '_default',
+
+        /**
+         * Initializes the widget.
+         * If an instance with the given name does not exist, creates an instance with the given configuration.
+         * Executes the widget initialization on the specified DOM fragment.
+         *
+         * @param options {JSON} widget configuration options
+         * @param fragment {String|jQuery|DOMElement} the DOM fragment selector, jQuery object or DOM element
+         * @param instanceName {String?} the widget instance identifier
+         */
+        initWidget: function (options, fragment, instanceName) {
+            var instance = ns.CtaBlockHtml._getInstance(instanceName);
+
+            if (typeof instance === "undefined") {
+                instance = new ns.CtaBlockHtml(options);
+                ns.CtaBlockHtml._setInstance(instance, instanceName);
+            }
+
+            instance.init(fragment)
+        },
+
+        /**
+         * Returns the widget instance object.
+         * May return undefined if not yet initialized.
+         *
+         * @param instanceName {String?} the widget instance identifier
+         * @return {undefined|PuiTheme.CtaBlockHtml} widget instance
+         * @private
+         */
+        _getInstance: function (instanceName) {
+            if (typeof instanceName === "undefined") {
+                instanceName = ns.CtaBlockHtml._defaultInstance;
+            }
+
+            return ns.CtaBlockHtml._instances[instanceName];
+        },
+
+        /**
+         * Stores the widget instance object.
+         *
+         * @param instance {PuiTheme.CtaBlockHtml} the widget instance
+         * @param instanceName {String?} the widget instance identifier
+         * @private
+         */
+        _setInstance: function (instance, instanceName) {
+            if (typeof instanceName === "undefined") {
+                instanceName = ns.CtaBlockHtml._defaultInstance;
+            }
+
+            ns.CtaBlockHtml._instances[instanceName] = instance;
+        }
+    });
+
+    $.extend(ns.CtaBlockHtml.prototype, {
+        _defaults: {
+            selectors: {
+                html: 'html',
+                parentCtaBlock: '.pui-m-cta-block',
+                component: '.html-c-cta-block',
+                componentExpandable: '.html-c-cta-block.html-is-expandable',
+                contentContainer: '.html-b-content',
+                buttonControl: '.html-b-control',
+                buttonCaption: '.html-caption',
+                buttonText: '.html-text'
+            },
+            cssClasses: {
+                isExpanded: 'html-is-expanded'
+            }
+        },
+        _attributes: {
+            ariaExpanded: "aria-expanded",
+            ariaHidden: "aria-hidden"
+        },
+        _data: {},
+        _options: {}, // constructed in _init()
+        _eventNamespace: '.CtaBlockHtml',
+
+        /**
+         * Init Split Button events.
+         * - display / hide navigation window
+         *
+         * @param $fragment {jQuery} jQuery object of the DOM fragment to initialize this component
+         * @private
+         */
+        _initEvents: function ($fragment) {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+            var $ctaBlockExpandableInstances = $(selectors.componentExpandable, $fragment);
+            var $ctaAnchorEventTargets = $(selectors.component, $fragment)
+                .not('.html-is-expandable')
+                .has('> a' + selectors.buttonControl);
+
+            $ctaBlockExpandableInstances.each(function (index, componentInstance) {
+                module._initEventsToggle($(componentInstance));
+            });
+
+            $ctaAnchorEventTargets.each(function (index, componentInstance) {
+                module._initAnchorEvents($(componentInstance));
+            });
+        },
+
+        /**
+         * Initiates all special events outside component needed to function properly
+         * - closing dropdown when clicked elsewhere
+         *
+         * @private
+         */
+        _initEventsOutsideComponent: function () {
+            var module = this;
+
+            $(document)
+                .off("click" + module._eventNamespace)
+                .on("click" + module._eventNamespace, function (e) {
+                    var isComponentToggleClick = false;
+                    if (e.originalEvent) {
+                        isComponentToggleClick = e.originalEvent._htmlCtaBlockToggleEvent;
+                    }
+                    if (!isComponentToggleClick) {
+                        module._collapseAllContents();
+                    }
+                });
+        },
+
+        /**
+         * Collapses all expanded contents.
+         *
+         * @private
+         */
+        _collapseAllContents: function () {
+            var module = this;
+            var attrs = module._attributes;
+            var selectors = module._options.selectors;
+            var cssClasses = module._options.cssClasses;
+
+            var $components = $(selectors.componentExpandable);
+            $components
+                .removeClass(cssClasses.isExpanded);
+            $components
+                .find(selectors.contentContainer)
+                .attr(attrs.ariaHidden, 'true');
+        },
+
+        /**
+         * Initiates anchor events for CTA block components with anchor controls.
+         * Sets up click event handler that tracks button clicks and handles navigation
+         * (either in new tab or same window) after a short delay.
+         *
+         * @param $componentInstance {jQuery} instance of component to init anchor events on
+         * @private
+         */
+        _initAnchorEvents: function ($componentInstance) {
+            var module = this;
+            var selectors = module._options.selectors;
+            var $anchor = $componentInstance.find('a' + selectors.buttonControl);
+            var url = $anchor.attr('href');
+            var buttonId = $componentInstance.attr('id');
+            var buttonType = $componentInstance.data('action-type');
+            var openInNewTab = $componentInstance.data('in-new-tab');
+            
+            $componentInstance
+                .off('click' + module._eventNamespace)
+                .on('click' + module._eventNamespace, function (e) {
+                    if (buttonId && buttonId !== '' && buttonType && buttonType !== '') {
+                        e.preventDefault();
+                        module._trackAnchorEvents($componentInstance, buttonId, buttonType);
+                        setTimeout(function () {
+                            if (openInNewTab) {
+                                window.open(url, "_blank");
+                            } else {
+                                window.location.href = url;
+                            }
+                        }, 100);
+                    }
+                });
+        },
+
+        /**
+         * Tracks anchor button click events using DTR.
+         * Extracts button text from the component and sends tracking data via window.measure.
+         *
+         * @param $componentInstance {jQuery} instance of component containing the button
+         * @param buttonId {String} unique identifier of the button
+         * @param buttonType {String} type/category of the button action
+         * @private
+         */
+        _trackAnchorEvents: function ($componentInstance, buttonId, buttonType) {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+            var buttonText = $(selectors.buttonCaption + " " + selectors.buttonText, $componentInstance).text();
+
+            window.measure({
+                action: "buttonClick",
+                buttonType: buttonType,
+                buttonId: buttonId,
+                buttonText: buttonText
+            });
+        },
+
+        /**
+         * Initiates events of opening / closing dropdown toggle
+         * - click and keypress
+         *
+         * @param $componentInstance {jQuery} instance of component to init on
+         * @private
+         */
+        _initEventsToggle: function ($componentInstance) {
+            var module = this;
+            var options = module._options;
+            var cssClasses = options.cssClasses;
+            var selectors = options.selectors;
+
+            $componentInstance.find(selectors.buttonControl)
+                .on("click" + module._eventNamespace + " keypress" + module._eventNamespace, function (e) {
+                    if (e.type === 'click' || e.key === "Enter" || e.key === " ") {
+                        module._toggleContent($componentInstance);
+                    }
+                });
+
+            $componentInstance
+                .on("click" + module._eventNamespace, function (e) {
+                    if (e.originalEvent) {
+                        e.originalEvent._htmlCtaBlockToggleEvent = true;
+                    }
+                });
+
+            $componentInstance
+                .on("focusout" + module._eventNamespace, function () {
+                    var self = $(this);
+                    setTimeout(function() {
+                        if (self.has($(document.activeElement)).length === 0 && $componentInstance.hasClass(cssClasses.isExpanded)) {
+                            module._toggleContent($componentInstance);
+                        }
+                    }, 0);
+                });
+        },
+
+        _toggleContent: function ($componentInstance) {
+            var module = this;
+            var options = module._options;
+            var attrs = module._attributes;
+            var selectors = options.selectors;
+            var cssClasses = options.cssClasses;
+            var isExpanded = $componentInstance.hasClass(cssClasses.isExpanded);
+            var $scope = $componentInstance.closest(selectors.parentCtaBlock);
+            var buttonId = $componentInstance.children(selectors.contentContainer).attr('id');
+            var buttonType = $componentInstance.attr('data-action-type');
+
+            if (!isExpanded && buttonId && buttonId !== '' && buttonType && buttonType !== '') {
+                var buttonText = $(selectors.buttonCaption + " " + selectors.buttonText, $componentInstance).text();
+
+                window.measure({
+                    action: "buttonClick",
+                    buttonType: buttonType,
+                    buttonId: buttonId,
+                    buttonText: buttonText
+                });
+            }
+
+            $(selectors.component, $scope)
+                .removeClass(cssClasses.isExpanded)
+                .find(selectors.contentContainer)
+                .attr(attrs.ariaHidden, 'true')
+                .find(selectors.buttonControl)
+                .attr(attrs.ariaHidden, 'false');
+
+            $componentInstance.toggleClass(cssClasses.isExpanded, !isExpanded);
+
+            $componentInstance
+                .find(selectors.buttonControl)
+                .attr(attrs.ariaExpanded, (!isExpanded).toString());
+
+            $componentInstance
+                .find(selectors.contentContainer)
+                .attr(attrs.ariaHidden, isExpanded.toString());
+        },
+
+        /**
+         * Initializes the component on a given DOM fragment.
+         *
+         * @param fragment {String|jQuery|DOMElement} the DOM fragment to initialize this component in
+         */
+        init: function (fragment) {
+            var module = this;
+
+            var $fragment = $(fragment);
+
+            module._initEvents($fragment);
+            module._initEventsOutsideComponent();
+        }
+    });
+})(window.PuiTheme, jQuery);

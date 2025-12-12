@@ -1,0 +1,418 @@
+// the semi-colon at the start is a safety net against concatenated
+// scripts and/or other plugins which may not be closed properly.
+;
+// Init Namespaces
+window.PuiTheme = window.PuiTheme || {};
+
+(function (ns, $) {
+    ns.CountdownClock = function(options) {
+        this._init(options);
+    };
+
+    $.extend(ns.CountdownClock.prototype, {
+        _defaults: {
+            selectors: {
+                scope: 'body',
+                countdownWrapper: '.html-c-countdown-clock'
+            },
+            classes: {
+                finished: 'html-is-finished',
+                active: 'html-is-active'
+            },
+            dataAttributes: {
+                granularity: 'granularity',
+                countdownEnd: 'countdown-end'
+            },
+            ticker: undefined,
+            displayFormat: {
+                showDays: ['days', 'hours', 'minutes', 'seconds'],
+                showHours: ['hours', 'minutes', 'seconds'],
+                showMinutes: ['minutes', 'seconds'],
+                showSeconds: ['seconds'],
+                showDaysOnly: 'days'
+            },
+            documentLanguage: 'cs',
+            locales: ['cs', 'en'],
+            inflections: {
+                cs: {
+                    days: {
+                        '0' : 'dní',
+                        '1' : 'den',
+                        '2' : 'dny',
+                        '5' : 'dní'
+                    },
+                    hours: {
+                        '0' : 'hodin',
+                        '1' : 'hodina',
+                        '2' : 'hodiny',
+                        '5' : 'hodin'
+                    },
+                    minutes: {
+                        '0' : 'minut',
+                        '1' : 'minuta',
+                        '2' : 'minuty',
+                        '5' : 'minut'
+                    },
+                    seconds: {
+                        '0' : 'vteřin',
+                        '1' : 'vteřina',
+                        '2' : 'vteřiny',
+                        '5' : 'vteřin'
+                    }
+                },
+                en: {
+                    days: {
+                        '0' : 'days',
+                        '1' : 'day',
+                        '2' : 'days'
+                    },
+                    hours: {
+                        '0' : 'hours',
+                        '1' : 'hour',
+                        '2' : 'hours'
+                    },
+                    minutes: {
+                        '0' : 'minutes',
+                        '1' : 'minute',
+                        '2' : 'minutes'
+                    },
+                    seconds: {
+                        '0' : 'seconds',
+                        '1' : 'second',
+                        '2' : 'seconds'
+                    }
+                }
+            },
+            $elements: {},
+            countdowns: [],
+            eventNamespace: ".countdownClock"
+        },
+        // @see _init() method
+        _options: {}, // constructed in _init()
+
+        /**
+         * Initializes countdown module
+         */
+        _init: function (options) {
+            var module = this;
+            // Init configuration
+            // perform deep copy of options
+
+            module._options = $.extend(true, {}, module._defaults, options || {});
+            module._options.$scope = $(module._options.selectors.scope);
+
+            var $scope = module._options.$scope;
+
+            module._detectLanguage();
+            module._initCountdowns($scope);
+            module._startCountDown();
+        },
+
+        /**
+         * Converts DateTime string to unix time
+         *
+         * @param dateTime
+         * @returns {number}
+         * @private
+         */
+        _getUnixTime: function(dateTime) {
+            return Date.parse(dateTime);
+        },
+
+        /**
+         * Computes difference of two unix time values
+         *
+         * @param actualTime
+         * @param endTime
+         * @returns {{total: *, days: *, hours: *, minutes: *, seconds: *}}
+         * @private
+         */
+        _getTimeDiff: function(actualTime, endTime) {
+            var actualDayStart = new Date(actualTime);
+            var endDayStart = new Date(endTime);
+
+            actualDayStart.setHours(0, 0, 0, 0);
+            endDayStart.setHours(0, 0, 0, 0);
+
+            var totalDiff = endTime - actualTime;
+            var seconds = Math.floor((totalDiff / 1000) % 60);
+            var minutes = Math.floor((totalDiff / 1000 / 60) % 60);
+            var hours = Math.floor((totalDiff / (1000 * 60 * 60)) % 24);
+            var hoursDiff = Math.floor((totalDiff / (1000 * 60 * 60)));
+            var days = Math.floor(totalDiff / (1000 * 60 * 60 * 24));
+
+            // difference in days based on date only
+            var daysCalendar = Math.floor((endDayStart - actualDayStart) / (1000 * 60 * 60 * 24));
+
+            // when countdown ends next day, do not show as 1 day + XX hours, but 0 days + YY hours (YY = XX + 24 when difference is more than 24 hours)
+            var daysNormalized = daysCalendar;
+            var hoursNormalized = hours;
+            if (daysCalendar === 1) {
+                daysNormalized = 0;
+
+                if  (hoursDiff >= 24) {
+                    hoursNormalized += 24;
+                }
+            } else if (daysCalendar > 1) {
+                daysNormalized = days;
+            }
+
+            return {
+                'total': totalDiff,
+                'days': days,
+                'daysCalendar' : daysCalendar,
+                'daysNormalized': daysNormalized,
+                'hours': hours,
+                'hoursNormalized': hoursNormalized,
+                'minutes': minutes,
+                'seconds': seconds
+            };
+        },
+
+        /**
+         * Updates countdown instance according to remainingTime
+         * if remainingTime is zero or negative, countdown is set as inactive
+         *
+         * @param countdownObject
+         * @param remainingTime
+         * @private
+         */
+        _updateClock: function(countdownObject, remainingTime) {
+            var module = this;
+            var options = module._options;
+            var classes = options.classes;
+            var displayFormat = options.displayFormat;
+            var inflections = options.inflections[options.documentLanguage];
+
+            if (countdownObject.isActive) {
+                if (remainingTime.total > 0) {
+                    if (countdownObject.$daysValue) {
+                        var days;
+                        if (countdownObject.granularity === displayFormat.showDaysOnly) {
+                            days = remainingTime.daysCalendar;
+                        } else {
+                            days = remainingTime.daysNormalized;
+                        }
+                        countdownObject.$daysValue.html(days);
+                        countdownObject.$daysLabel.html(module._unitInflector(days.toString(), inflections.days));
+                    }
+                    if (countdownObject.$hoursValue) {
+                        countdownObject.$hoursValue.html(remainingTime.hoursNormalized);
+                        countdownObject.$hoursLabel.html(module._unitInflector(remainingTime.hours.toString(), inflections.hours));
+                    }
+                    if (countdownObject.$minutesValue) {
+                        countdownObject.$minutesValue.html(('0' + remainingTime.minutes).slice(-2));
+                        countdownObject.$minutesLabel.html(module._unitInflector(remainingTime.minutes.toString(), inflections.minutes));
+                    }
+                    if (countdownObject.$secondsValue) {
+                        countdownObject.$secondsValue.html(('0' + remainingTime.seconds).slice(-2));
+                        countdownObject.$secondsLabel.html(module._unitInflector(remainingTime.seconds.toString(), inflections.seconds));
+                    }
+                } else {
+                    countdownObject.isActive = false;
+                    countdownObject.$element.addClass(classes.finished);
+                    countdownObject.$element.removeClass(classes.active);
+
+                    if (countdownObject.$daysValue) {
+                        countdownObject.$daysValue.html('0');
+                        countdownObject.$daysLabel.html(inflections.days['0']);
+                    }
+                    if (countdownObject.$hoursValue) {
+                        countdownObject.$hoursValue.html('0');
+                        countdownObject.$hoursLabel.html(inflections.hours['0']);
+                    }
+                    if (countdownObject.$minutesValue) {
+                        countdownObject.$minutesValue.html('00');
+                        countdownObject.$minutesLabel.html(inflections.minutes['0']);
+                    }
+                    if (countdownObject.$secondsValue) {
+                        countdownObject.$secondsValue.html('00');
+                        countdownObject.$secondsLabel.html(inflections.seconds['0']);
+                    }
+                }
+            }
+        },
+
+        /**
+         * Initializes all new countdowns in given scope
+         *
+         * @param $scope
+         * @private
+         */
+        _initCountdowns: function ($scope) {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+            var classes = options.classes;
+            var inflections = options.inflections[options.documentLanguage];
+            var $countdowns = $(selectors.countdownWrapper, $scope);
+            var countdownObjects = options.countdowns;
+            var actualTime = module._getUnixTime(new Date());
+
+            $countdowns.each(function () {
+                var $countdown = $(this);
+
+                if ($countdown.hasClass(classes.active) || $countdown.hasClass(classes.finished)) {
+                    return; // initialized, iterate next
+                }
+
+                var countdownObject = {
+                    $element: $countdown,
+                    granularity: $countdown.data(options.dataAttributes.granularity),
+                    deadline: module._getUnixTime($countdown.data(options.dataAttributes.countdownEnd))
+                };
+
+                var remainingTime = module._getTimeDiff(actualTime, countdownObject.deadline);
+
+                // days
+                countdownObject.$element.append('<div class="html-b-countdown-field pui-days">' +
+                    '<div class="html-b-value pui-js-days-value">&nbsp;</div>' +
+                    '<div class="html-b-label pui-js-days-label">' + module._unitInflector('0', inflections.days) + '</div>' +
+                    '</div>');
+                countdownObject.$daysValue = $('.pui-js-days-value', countdownObject.$element);
+                countdownObject.$daysLabel = $('.pui-js-days-label', countdownObject.$element);
+
+                // if hours shown
+                if (options.displayFormat.showHours.indexOf(countdownObject.granularity) > -1) {
+                    countdownObject.$element.append('<div class="html-b-countdown-field pui-hours">' +
+                        '<div class="html-b-value pui-js-hours-value">&nbsp;</div>' +
+                        '<div class="html-b-label pui-js-hours-label">' + module._unitInflector('0', inflections.hours) + '</div>' +
+                        '</div>');
+                    countdownObject.$hoursValue = $('.pui-js-hours-value', countdownObject.$element);
+                    countdownObject.$hoursLabel = $('.pui-js-hours-label', countdownObject.$element);
+                } else {
+                    countdownObject.$hoursValue = undefined;
+                    countdownObject.$hoursLabel = undefined;
+                }
+
+                // if minutes shown
+                if (options.displayFormat.showMinutes.indexOf(countdownObject.granularity) > -1) {
+                    countdownObject.$element.append('<div class="html-b-countdown-field pui-minutes">' +
+                        '<div class="html-b-value pui-js-minutes-value">&nbsp;</div>' +
+                        '<div class="html-b-label pui-js-minutes-label">' + module._unitInflector('0', inflections.minutes) + '</div>' +
+                        '</div>');
+                    countdownObject.$minutesValue = $('.pui-js-minutes-value', countdownObject.$element);
+                    countdownObject.$minutesLabel = $('.pui-js-minutes-label', countdownObject.$element);
+                } else {
+                    countdownObject.$minutesValue = undefined;
+                    countdownObject.$minutesLabel = undefined;
+                }
+
+                // if seconds shown
+                if (options.displayFormat.showSeconds.indexOf(countdownObject.granularity) > -1) {
+                    countdownObject.$element.append('<div class="html-b-countdown-field pui-seconds">' +
+                        '<div class="html-b-value pui-js-seconds-value">&nbsp;</div>' +
+                        '<div class="html-b-label pui-js-seconds-label">' + module._unitInflector('0', inflections.seconds) + '</div>' +
+                        '</div>');
+                    countdownObject.$secondsValue = $('.pui-js-seconds-value', countdownObject.$element);
+                    countdownObject.$secondsLabel = $('.pui-js-seconds-label', countdownObject.$element);
+                } else  {
+                    countdownObject.$secondsValue = undefined;
+                    countdownObject.$secondsLabel = undefined;
+                }
+
+                countdownObject.isActive = true;
+                countdownObject.$element.addClass(classes.active);
+
+                module._updateClock(countdownObject, remainingTime);
+
+                countdownObjects.push(countdownObject);
+            });
+        },
+
+        /**
+         * Starts ticker
+         * @private
+         */
+        _startCountDown: function () {
+            var module = this;
+            var options = module._options;
+
+            if (typeof options.ticker  !== "undefined") {
+                clearInterval(options.ticker);
+            }
+
+            options.ticker = setInterval(function () {
+                var countdowns = options.countdowns;
+                var actualTime = module._getUnixTime(new Date());
+
+                for (var i = 0; i < countdowns.length; i++) {
+                    var countdown = countdowns[i];
+                    var remainingTime = module._getTimeDiff(actualTime, countdown.deadline);
+
+                    module._updateClock(countdown, remainingTime);
+                }
+
+            }, 1000);
+        },
+
+        /**
+         * Destroys ticker
+         *
+         * @private
+         */
+        _stopCountDown: function () {
+            var module = this;
+            var options = module._options;
+
+            clearInterval(options.ticker);
+            options.ticker = undefined;
+        },
+
+        /**
+         * Returns proper unit inflection
+         *
+         * @param value
+         * @param inflections
+         * @returns {*}
+         * @private
+         */
+        _unitInflector: function (value, inflections) {
+            var minValue = -Infinity;
+
+            $.each(inflections, function (key, val) {
+                // find the highest index, which is lower than the value
+                if (key <= Math.abs(value) && key > minValue) {
+                    minValue = key;
+                }
+            });
+            return inflections[minValue];
+        },
+
+        /**
+         * Trys to detect document language.
+         * If detected language is present in locales, options.documentLanguage is set.
+         *
+         * @private
+         */
+        _detectLanguage: function () {
+            var module = this;
+            var options = module._options;
+            var locales = options.locales;
+            var documentLanguage = document.documentElement.lang.split('-')[0];
+
+            if (locales.indexOf(documentLanguage)) {
+                options.documentLanguage = documentLanguage;
+            }
+        },
+
+        /**
+         * Lazy initialization of countdowns
+         *
+         * @param $scope
+         */
+        addCountdownInstances: function ($scope) {
+            var module = this;
+            module._initCountdowns($scope);
+        }
+    });
+})(window.PuiTheme, jQuery);
+
+(function (ns, $) {
+    $(function () {
+        if (typeof ns.CountdownClock !== "undefined") {
+            ns.countdownClockInstance = new ns.CountdownClock();
+        }
+    });
+})(window.PuiTheme, jQuery);
+

@@ -1,0 +1,148 @@
+// the semi-colon at the start is a safety net against concatenated
+// scripts and/or other plugins which may not be closed properly.
+;
+// Init Namespaces
+window.PuiTheme = window.PuiTheme || {};
+
+(function (ns, $) {
+    "use strict";
+
+    /**
+     * Component - PRJ1113: CTA block
+     *
+     * Dependencies: jQuery
+
+     * @param options {JSON} widget configuration options
+     * @constructor
+     */
+    ns.ScrollToCta = function (options) {
+        var module = this;
+
+        module._options = $.extend({}, module._defaults, options || {});
+    };
+
+    /**
+     * Widget static init methods
+     */
+    $.extend(ns.ScrollToCta, {
+        _instances: {},
+        _defaultInstance: '_default',
+
+        /**
+         * Initializes the widget.
+         * If an instance with the given name does not exist, creates an instance with the given configuration.
+         * Executes the widget initialization on the specified DOM fragment.
+         *
+         * @param options {JSON} widget configuration options
+         * @param fragment {String|jQuery|DOMElement} the DOM fragment selector, jQuery object or DOM element
+         * @param instanceName {String?} the widget instance identifier
+         */
+        initWidget: function (options, fragment, instanceName) {
+            var instance = ns.ScrollToCta._getInstance(instanceName);
+
+            if (typeof instance === "undefined") {
+                instance = new ns.ScrollToCta(options);
+                ns.ScrollToCta._setInstance(instance, instanceName);
+            }
+
+            instance.init(fragment)
+        },
+
+        /**
+         * Returns the widget instance object.
+         * May return undefined if not yet initialized.
+         *
+         * @param instanceName {String?} the widget instance identifier
+         * @return {undefined|PuiTheme.ScrollToCta} widget instance
+         * @private
+         */
+        _getInstance: function (instanceName) {
+            if (typeof instanceName === "undefined") {
+                instanceName = ns.ScrollToCta._defaultInstance;
+            }
+
+            return ns.ScrollToCta._instances[instanceName];
+        },
+
+        /**
+         * Stores the widget instance object.
+         *
+         * @param instance {PuiTheme.ScrollToCta} the widget instance
+         * @param instanceName {String?} the widget instance identifier
+         * @private
+         */
+        _setInstance: function (instance, instanceName) {
+            if (typeof instanceName === "undefined") {
+                instanceName = ns.ScrollToCta._defaultInstance;
+            }
+
+            ns.ScrollToCta._instances[instanceName] = instance;
+        }
+    });
+
+    $.extend(ns.ScrollToCta.prototype, {
+        _defaults: {
+            selectors: {
+                component: '.html-is-button.html-is-linked-to-cta'
+            }
+        },
+
+        _options: {}, // constructed in _init()
+        _eventNamespace: '.ScrollToCta',
+
+        /**
+         * Init Split Button events.
+         * - display / hide navigation window
+         *
+         * @private
+         */
+        _clickButtonScrollToCta: function () {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+            var $button = $(selectors.component);
+            $button
+                .off("click" + module._eventNamespace)
+                .on("click" + module._eventNamespace, function (e) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    $(document).trigger('puiCtaToScrollViewport');
+                    module._trackButtonClick(e.target);
+                });
+        },
+
+        /**
+         * Send Digital tracking information
+         *
+         * @param {Object} anchor HTML element
+         * @private
+         */
+        _trackButtonClick: function (anchor) {
+            var trackingData = {
+                action: "iWantToApply"
+            };
+
+            // notify tracking API
+            if (typeof window.measure === "function") {
+                window.measure(trackingData);
+            }
+        },
+
+        /**
+         * Initializes the component on a given DOM fragment.
+         *
+         */
+        init: function () {
+            var module = this;
+            module._clickButtonScrollToCta();
+        }
+    });
+})(window.PuiTheme, jQuery);
+
+(function (ns, $) {
+    $(function () {
+        if (typeof ns.ScrollToCta !== "undefined") {
+            ns.ScrollToCta.initWidget();
+        }
+    });
+})(window.PuiTheme, jQuery);

@@ -1,0 +1,52 @@
+// BEGIN CkEditor Source Mode
+// čekej na stránku loaded
+window.onload = function () {
+    if (window.Liferay && window.Liferay.Loader) {
+        const jsPackageId = window.JS_COMPONENT_WEB_PACKAGE_ID || 'frontend-js-components-web/index';
+        // search Liferay.Loader configuration and find the frontend-js-components-web
+        console.debug('Liferay.Loader.require for ' + jsPackageId);
+        // čekej, až jsou frontend-js-components-web inicializované
+        Liferay.Loader.require(jsPackageId, function (ckeditorModule) {
+            // Check if CKEDITOR is defined
+            if (typeof CKEDITOR === 'undefined') {
+                console.debug('CKEDITOR is not defined');
+                return;
+            }
+
+            const targetInstanceName = '_com_liferay_journal_web_portlet_JournalPortlet_descriptionMapAsXMLEditor';
+            const editor = CKEDITOR.instances[targetInstanceName];
+            if (editor) {
+                function forceSourceMode(ed) {
+                    if (ed.mode !== 'source') {
+                        ed.setMode('source');
+                    }
+                    // redefine setMode to prevent further changes
+                    ed.setMode = function () {
+                        console.log('CKEDITOR setMode called, but ignored for ' + ed.name);
+                    };
+                }
+
+                function applyHtml5CkeditorFix() {
+                    delete CKEDITOR.dtd.$inline['a'];
+                    CKEDITOR.dtd.$block.a = 1;
+                    CKEDITOR.dtd.a.p = 1;
+                    CKEDITOR.dtd.a.div = 1;
+                    CKEDITOR.dtd.a.img = 1;
+                    CKEDITOR.dtd.p.a = 1;
+                }
+                applyHtml5CkeditorFix();
+                // buď už je ready, přepni, nebo počkaj až bude ready a přepni
+                if (editor.status === 'ready') {
+                    forceSourceMode(editor);
+                } else {
+                    editor.on('instanceReady', function (event) {
+                        forceSourceMode(event.editor);
+                    }, null, null, -10);
+                }
+            }
+        }, function() {
+            console.info('CKEDITOR miss');
+        });
+    }
+};
+// END CkEditor Source Mode

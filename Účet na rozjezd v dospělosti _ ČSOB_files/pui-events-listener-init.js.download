@@ -1,0 +1,21 @@
+// the semi-colon at the start is a safety net against concatenated
+// scripts and/or other plugins which may not be closed properly.
+;
+// Init Namespaces
+window.PuiTheme = window.PuiTheme || {};
+
+/**
+ * PUI Events listener helper
+ *
+ * Dependencies: theme-events.js, pui-events-listener.js
+ *
+ * @version 1.0
+ */
+(function (ns) {
+    "use strict";
+
+    var puiEventListener = ns.PuiEventsListener;
+    if(typeof puiEventListener !== "undefined") {
+        puiEventListener.initWidget();
+    }
+})(window.PuiTheme);

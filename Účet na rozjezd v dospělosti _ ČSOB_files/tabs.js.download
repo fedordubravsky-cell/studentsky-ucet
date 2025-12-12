@@ -1,0 +1,141 @@
+/**
+ * Module _Tabs_ support JS
+ *
+ * Makes changes to DOM and initializes module
+ *
+ * Dependencies: jQuery
+ *
+ * @version: 1.0
+ */
+
+// the semi-colon at the start is a safety net against concatenated
+// scripts and/or other plugins which may not be closed properly.
+;
+// Init Namespaces
+window.PuiTheme = window.PuiTheme || {};
+
+(function (ns, $) {
+    /**
+     * Initializes Tabs jQuery module
+     *
+     * @constructor
+     *
+     */
+    ns.PuiTabs = function (options) {
+        const module = this;
+        module.options = $.extend({}, module._defaults, options || {});
+        module._init();
+    };
+
+    $.extend(ns.PuiTabs.prototype, {
+        _defaults: {
+            selectors: {
+                tabsModule: '.pui-m-tabs',
+                tabsContainer: '.pui-lfr-drop-zone',
+                singleTab: '.html-b-tab',
+                singleTabHeader: '.html-b-tab-header',
+                singleTabContent: '.html-b-tab-content',
+                fragment: '.pui-fragment'
+            },
+            classes: {
+                isEditModeOn: 'has-edit-mode-menu',
+                tabsModuleInitialized: 'pui-is-initialized',
+                tabsListItem: 'pui-tabs-list-item',
+                tabContainer: 'pui-tabs-tab-container'
+            },
+            tabIdPrefixDefault: 'tab-',
+            dataAttributeTabsModuleNamespace: 'tabs-module-namespace',
+            dataAttributeTabId: 'tab-id',
+            isInitEnabled: true
+        },
+        _eventNamespace: '.PuiTabs',
+
+        _init: function () {
+            const module = this;
+            const options = module.options;
+
+            options.isInitEnabled = !$('body').hasClass(options.classes.isEditModeOn);
+        },
+
+        /**
+         * Initializes all Tabs modules in given scope
+         *
+         * @param {string, jQuery, Element} scope
+         */
+        initTabsModulesInScope: function (scope) {
+            const module = this;
+            const options = module.options;
+            const $context = $(scope);
+
+            if (options.isInitEnabled && $context.length > 0) {
+                const $tabsModules = $(options.selectors.tabsModule, $context);
+                $tabsModules.each(function () {
+                    const $tabsModule = $(this);
+                    if (!$tabsModule.hasClass(options.classes.tabsModuleInitialized)) {
+                        module._initTabsModule($tabsModule);
+                    }
+                });
+            }
+        },
+
+        /**
+         * Initializes single Tabs module
+         *
+         * @param {jQuery} $tabsModule
+         * @private
+         */
+        _initTabsModule: function($tabsModule) {
+            const module = this;
+            const options = module.options;
+            const selectors = options.selectors;
+            const classes = options.classes;
+            const fragmentNamespace = $tabsModule.data(options.dataAttributeTabsModuleNamespace);
+
+            const $tabsContainer = $tabsModule.children(selectors.tabsContainer);
+            const $tabs = $tabsContainer.children(selectors.fragment);
+            const $tabsHeaders = $('<ul></ul>');
+
+            $tabs.each((index, element) => {
+                const $singleTabWrapper = $(element);
+                const $singleTab = $(selectors.singleTab, $singleTabWrapper);
+                let $singleTabHeader = $(selectors.singleTabHeader, $singleTab);  // Attempt to get tab header from dedicated container
+
+                if ($singleTabHeader.length === 0) {
+                    // When container not present, try to get first <h2> from tab content
+                    const $inContentHeader = $singleTab.find(`${selectors.singleTabContent} h2`);
+                    if ($inContentHeader.length > 0) {
+                        $singleTabHeader = $($inContentHeader.get(0));
+                    }
+                }
+
+                if ($singleTabHeader.length > 0) {
+                    // When sufficient header present, prepare tab and its content
+                    let elementId = `${options.tabIdPrefixDefault}${fragmentNamespace}-${index + 1}`;
+                    const customTabId = $singleTab.data(options.dataAttributeTabId);
+                    if (customTabId !== '') {
+                        elementId = customTabId;
+                    }
+                    $singleTabWrapper.attr('id', elementId).addClass(classes.tabContainer);
+
+                    const $tabHeader = $(`<li class="${classes.tabsListItem}"><a href="#${elementId}">${$singleTabHeader.text()}</a></li>`);
+                    $tabsHeaders.append($tabHeader);
+                    $singleTabHeader.detach();
+                } else {
+                    // Remove tab which does not contain any <h2>
+                    $singleTabWrapper.detach();
+                }
+            });
+
+            $tabsContainer.prepend($tabsHeaders);
+            $tabsContainer.tabs();
+            $tabsModule.addClass(classes.tabsModuleInitialized);
+        }
+    });
+
+    ns.tabs = new ns.PuiTabs();
+
+    // On document ready
+    $(function () {
+        ns.tabs.initTabsModulesInScope('body');
+    });
+})(window.PuiTheme, jQuery);

@@ -1,0 +1,512 @@
+// the semi-colon at the start is a safety net against concatenated
+// scripts and/or other plugins which may not be closed properly.
+;
+// Init Namespaces
+window.PuiTheme = window.PuiTheme || {};
+
+(function (ns, $) {
+    "use strict";
+
+    /**
+     * Component - PRJ1136 Context Menu Button script.
+     * Adds demonstration logic of component user interaction.
+     *
+     * Dependencies: jQuery
+     *
+     * @param options {JSON} widget configuration options
+     * @constructor
+     */
+    ns.ContextMenuButton = function (options) {
+        var module = this;
+
+        module._options = $.extend({}, module._defaults, options || {});
+    };
+
+    /**
+     * Widget static init methods
+     */
+    $.extend(ns.ContextMenuButton, {
+        _instances: {},
+        _defaultInstance: '_default',
+
+        /**
+         * Initializes the widget.
+         * If an instance with the given name does not exist, creates an instance with the given configuration.
+         * Executes the widget initialization on the specified DOM fragment.
+         *
+         * @param options {JSON} widget configuration options
+         * @param fragment {String|jQuery|DOMElement} the DOM fragment selector, jQuery object or DOM element
+         * @param instanceName {String?} the widget instance identifier
+         */
+        initWidget: function (options, fragment, instanceName) {
+            var instance = ns.ContextMenuButton._getInstance(instanceName);
+
+            if (typeof instance === "undefined") {
+                instance = new ns.ContextMenuButton(options);
+                ns.ContextMenuButton._setInstance(instance, instanceName);
+            }
+
+            instance.init(fragment);
+        },
+
+        /**
+         * Returns the widget instance object.
+         * May return undefined if not yet initialized.
+         *
+         * @param instanceName {String?} the widget instance identifier
+         * @return {undefined|PuiTheme.ContextMenuButton} widget instance
+         * @private
+         */
+        _getInstance: function (instanceName) {
+            if (typeof instanceName === "undefined") {
+                instanceName = ns.ContextMenuButton._defaultInstance;
+            }
+
+            return ns.ContextMenuButton._instances[instanceName];
+        },
+
+        /**
+         * Stores the widget instance object.
+         *
+         * @param instance {PuiTheme.ContextMenuButton} the widget instance
+         * @param instanceName {String?} the widget instance identifier
+         * @private
+         */
+        _setInstance: function (instance, instanceName) {
+            if (typeof instanceName === "undefined") {
+                instanceName = ns.ContextMenuButton._defaultInstance;
+            }
+
+            ns.ContextMenuButton._instances[instanceName] = instance;
+        }
+    });
+
+    $.extend(ns.ContextMenuButton.prototype, {
+        _defaults: {
+            selectors: {
+                html: 'html',
+                component: '.html-c-context-menu-button',
+                dropdownToggle: '.html-c-button .html-button',
+                dropdownContainer: '.html-b-context-container',
+                dropdownMenuItem: '.html-menu-item',
+                dropdownMenuItemNotDisabled: '.html-menu-item:not(.html-is-disabled)',
+                buttonComponent: '.html-c-button',
+                buttonComponentNotDisabled: '.html-c-button:not(.html-is-disabled)',
+                button: '.html-button',
+                dropdownAlignmentRegEx: /html-has-dropdown-aligned-\w+/g // used as a Wildcard selector
+            },
+            cssClasses: {
+                isActive: 'html-is-active',
+                isDisabled: 'html-is-disabled',
+                isExpanded: 'html-is-expanded',
+                dropdownAlignment: 'html-has-dropdown-aligned-'
+            },
+            animationDuration: 0,
+            dropdownOptions: {
+                positionMy: "left top",
+                positionAt: "left bottom",
+                positionCollision: "fit flip",
+                positionWithin: window
+            }
+        },
+        _attributes: {
+            ariaHidden: 'aria-hidden'
+        },
+        _options: {}, // constructed in _init()
+        _eventNamespace: '.ContextMenuButton',
+
+        /**
+         * Init Context Menu Button events.
+         * - display / hide navigation window
+         *
+         * @param $fragment {jQuery} jQuery object of the DOM fragment to initialize this component
+         * @private
+         */
+        _initEvents: function ($fragment) {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+
+            var $dropdownButtonInstances = $(selectors.component, $fragment);
+
+            $dropdownButtonInstances.each(function (index, componentInstance) {
+                var $componentInstance = $(componentInstance);
+                module._initEventsDropdownToggle($componentInstance);
+                module._initEventsKeyboardControl($componentInstance);
+                module._initEventsDropdownMenuItem($componentInstance);
+            });
+
+            module._initEventsOutsideComponent();
+        },
+
+        /**
+         * Initiates all special events outside component needed to function properly
+         * - closing dropdown when clicked elsewhere
+         *
+         * @private
+         */
+        _initEventsOutsideComponent: function () {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+
+            $(selectors.html)
+                .off('click' + module._eventNamespace)
+                .on('click' + module._eventNamespace, function (e) {
+                    if (typeof e.originalEvent !== "undefined" && typeof e.originalEvent._htmlDropdownButtonToggleEvent !== "undefined") {
+                        var isComponentToggleClick = e.originalEvent._htmlDropdownButtonToggleEvent;
+                    }
+                    if (!isComponentToggleClick) {
+                        module._closeAllDropdowns();
+                    }
+                });
+        },
+
+        /**
+         * Initiates events of opening / closing dropdown toggle
+         * - click and keypress
+         *
+         * @param $componentInstance {jQuery} instance of component to init on
+         * @private
+         */
+        _initEventsDropdownToggle: function ($componentInstance) {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+
+            var $dropdownToggle = $componentInstance.find(selectors.dropdownToggle);
+
+            $dropdownToggle
+                .off('click' + module._eventNamespace)
+                .on('click' + module._eventNamespace, function (e) {
+                    module._toggleDropdown($componentInstance);
+                    // set flag for HTML close event net
+                    e.originalEvent._htmlDropdownButtonToggleEvent = true;
+                    module._setFocusToTheFirstItem($componentInstance);
+                })
+                .off('keypress' + module._eventNamespace)
+                .on('keypress' + module._eventNamespace, function (e) {
+                    if ((e.which === $.ui.keyCode.ENTER) || (e.which === $.ui.keyCode.SPACE) || (e.which === $.ui.keyCode.DOWN)) {
+                        module._toggleDropdown($componentInstance);
+                        module._setFocusToTheFirstItem($componentInstance);
+                    }
+                });
+        },
+
+        /**
+         * Initiates events on dropdown menu item
+         * - click
+         * - keypress
+         *
+         * @param $componentInstance {jQuery} instance of component to init on
+         * @private
+         */
+        _initEventsDropdownMenuItem: function ($componentInstance) {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+            var cssClasses = module._options.cssClasses;
+
+            var $dropdownToggle = $componentInstance.find(selectors.dropdownToggle);
+            var $dropdownMenuItem = $componentInstance.find(selectors.dropdownMenuItem);
+
+            $dropdownMenuItem
+                .off('click' + module._eventNamespace)
+                .on('click' + module._eventNamespace, function (e) {
+                    var $dropdownMenuItem = $(this).closest(selectors.dropdownMenuItem);
+
+                    if (!$dropdownMenuItem.hasClass(cssClasses.isDisabled)) {
+                        $dropdownToggle.focus();
+                        module._toggleDropdown($componentInstance);
+                        // set flag for HTML close event net
+                        e.originalEvent._demoAdvancedComboToggleEvent = true;
+                    }
+                    else {
+                        // set flag for HTML close event net
+                        e.originalEvent._demoAdvancedComboToggleEvent = true;
+                    }
+                })
+                .off('keypress' + module._eventNamespace)
+                .on('keypress' + module._eventNamespace, function (e) {
+                    if ((e.which === $.ui.keyCode.ENTER) || (e.which === $.ui.keyCode.SPACE)) {
+                        module._toggleDropdown($componentInstance);
+                        $dropdownToggle.focus();
+                        // set flag for HTML close event net
+                        e.originalEvent._demoAdvancedComboToggleEvent = true;
+
+
+                    }
+                });
+        },
+
+        /**
+         * Initiates events for up and down arrow keys to support
+         * keyboard control similar as standard HTML select
+         *
+         * @param $componentInstance {jQuery} instance of component to init on
+         * @private
+         */
+        _initEventsKeyboardControl: function ($componentInstance) {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+
+            var $dropdownToggle = $componentInstance.find(selectors.dropdownToggle);
+            var $dropdownContainer = $componentInstance.find(selectors.dropdownContainer);
+            var $dropdownMenuItems = $dropdownContainer.find(selectors.dropdownMenuItem);
+
+            $dropdownMenuItems
+                .off('keydown' + module._eventNamespace)
+                .on('keydown' + module._eventNamespace, function (e) {
+                    var $dropdownMenuItem = $(this).eq(0);
+                    var $dropdownMenuItemPrev = $dropdownMenuItem.prevAll(selectors.dropdownMenuItemNotDisabled).eq(0);
+                    var $dropdownMenuItemNext = $dropdownMenuItem.nextAll(selectors.dropdownMenuItemNotDisabled).eq(0);
+
+                    if (e.which === $.ui.keyCode.DOWN && $dropdownMenuItemNext.length > 0) {
+                        $dropdownMenuItemNext.focus();
+                        event.preventDefault();
+                    }
+                    if (e.which === $.ui.keyCode.DOWN && $dropdownMenuItemNext.length === 0) {
+                        event.preventDefault();
+                    }
+                    if (e.which === $.ui.keyCode.UP && $dropdownMenuItemPrev.length > 0) {
+                        $dropdownMenuItemPrev.focus();
+                        event.preventDefault();
+                    }
+                    if (e.which === $.ui.keyCode.UP && $dropdownMenuItemPrev.length === 0) {
+                        event.preventDefault();
+                    }
+                    if (e.which === $.ui.keyCode.TAB && $dropdownMenuItemNext.length === 0) {
+                        module._setFocusToTheFirstItem($componentInstance);
+                        event.preventDefault();
+                    }
+                })
+                .off('keyup' + module._eventNamespace)
+                .on('keyup' + module._eventNamespace, function (e) {
+                    if (e.which === $.ui.keyCode.ESCAPE) {
+                        module._closeAllDropdowns();
+                        $dropdownToggle.focus();
+                    }
+                });
+        },
+
+        /**
+         * Close all dropdowns.
+         *
+         * @private
+         */
+        _closeAllDropdowns: function () {
+            var module = this;
+            var attrs = module._attributes;
+            var selectors = module._options.selectors;
+            var cssClasses = module._options.cssClasses;
+            var animationDuration = parseInt(module._options.animationDuration);
+
+            var $components = $(selectors.component);
+
+            $components
+                .each(function () {
+                    var $componentInstance = $(this);
+                    var $buttonComponent = $componentInstance.find(selectors.buttonComponent);
+                    var $dropdownContainer = $componentInstance.find(selectors.dropdownContainer);
+
+                    $dropdownContainer.fadeOut(animationDuration, function () {
+                        $buttonComponent.removeClass(cssClasses.isActive);
+                        $componentInstance
+                            .removeClass(cssClasses.isExpanded)
+                            .removeClass(function (index, css) {
+                                return (css.match(selectors.dropdownAlignmentRegEx) || []).join(' ');
+                            });
+                    });
+                });
+            $components
+                .find(cssClasses.dropdownContainer)
+                .attr(attrs.ariaHidden, 'true');
+        },
+
+        /**
+         * Toggle dropdown state of a given component instance.
+         *
+         * @param $componentInstance {jQuery} component container
+         * @return boolean true if dropdown is currently expanded, false otherwise
+         * @private
+         */
+        _toggleDropdown: function ($componentInstance) {
+            var module = this;
+            var attrs = module._attributes;
+            var selectors = module._options.selectors;
+            var cssClasses = module._options.cssClasses;
+            var animationDuration = parseInt(module._options.animationDuration);
+
+            var $buttonComponent = $componentInstance.find(selectors.buttonComponent);
+
+            var isDisabled = $componentInstance.hasClass(cssClasses.isDisabled);
+            var isExpanded = $componentInstance.hasClass(cssClasses.isExpanded);
+
+            if (isDisabled) {
+                return;
+            }
+
+            // toggle dropdown
+            var $dropdownContainer = $componentInstance.find(selectors.dropdownContainer);
+
+            $dropdownContainer.fadeOut(animationDuration, function () {
+                module._closeAllDropdowns();
+            });
+
+            // use explicit add/remove for consistency
+            if (!isExpanded) {
+                $buttonComponent.addClass(cssClasses.isActive);
+                $dropdownContainer.fadeIn(animationDuration, function () {
+                    $componentInstance.addClass(cssClasses.isExpanded);
+                });
+
+                module._dropdownPosition($componentInstance);
+            }
+
+            $dropdownContainer.attr(attrs.ariaHidden, isExpanded);
+
+            return !isExpanded;
+        },
+
+        /**
+         * Set position to dropdown and classes to component indicating dropdown alignment
+         *
+         * @param $componentInstance {jQuery} component container
+         * @private
+         */
+        _dropdownPosition: function ($componentInstance) {
+            var module = this;
+            var selectors = module._options.selectors;
+            var cssClasses = module._options.cssClasses;
+
+            var componentConfiguration = module._getComponentsPositionDataAttributes($componentInstance);
+            var componentsOptions = $.extend({}, module._defaults.dropdownOptions, componentConfiguration || {});
+            var $dropdownContainer = $componentInstance.find(selectors.dropdownContainer);
+
+            $componentInstance
+                .removeClass(function (index, css) {
+                    return (css.match(selectors.dropdownAlignmentRegEx) || []).join(' ');
+                });
+
+            $dropdownContainer.position({
+                my: componentsOptions.positionMy,
+                at: componentsOptions.positionAt,
+                of: $componentInstance,
+                collision: componentsOptions.positionCollision,
+                within: componentsOptions.positionWithin,
+                using: function (position, feedback) {
+                    // jQuery UI feedback is not used, see https://bugs.jqueryui.com/ticket/15290
+
+                    // Element
+                    var alignedHorizontal;
+                    var alignedVertical;
+
+                    var elementLeftPosition = Math.round(feedback.element.left);
+                    var elementRightPosition = Math.round(feedback.element.left + feedback.element.width);
+                    var elementTopPosition = Math.round(feedback.element.top);
+                    var elementBottomPosition = Math.round(feedback.element.top + feedback.element.height);
+
+                    // Target
+                    var targetLeftPosition = Math.round(feedback.target.left);
+                    var targetRightPosition = Math.round(feedback.target.left + feedback.target.width);
+                    var targetTopPosition = Math.round(feedback.target.top);
+                    var targetBottomPosition = Math.round(feedback.target.top + feedback.target.height);
+
+                    // Horizontal alignment
+                    if ((elementLeftPosition == targetLeftPosition) && (elementRightPosition != targetRightPosition)) {
+                        alignedHorizontal = 'left';
+                    } else if ((elementRightPosition == targetRightPosition) && (elementLeftPosition != targetLeftPosition)) {
+                        alignedHorizontal = 'right';
+                    } else if ((elementLeftPosition == targetLeftPosition) && (elementRightPosition == targetRightPosition)) {
+                        alignedHorizontal = 'center';
+                    } else if ((elementLeftPosition > targetLeftPosition) && (elementRightPosition < targetRightPosition)) {
+                        alignedHorizontal = 'in-between-horizontal';
+                    }
+
+                    // Vertical alignment
+                    if ((elementTopPosition == targetBottomPosition) && (elementBottomPosition != targetBottomPosition)) {
+                        alignedVertical = 'bottom';
+                    } else if ((elementBottomPosition == targetTopPosition) && (elementTopPosition != targetTopPosition)) {
+                        alignedVertical = 'top';
+                    } else if ((elementTopPosition == targetTopPosition) && (elementBottomPosition == targetBottomPosition)) {
+                        alignedVertical = 'middle';
+                    } else if ((elementTopPosition > targetTopPosition) && (elementBottomPosition < targetBottomPosition)) {
+                        alignedVertical = 'in-between-vertical';
+                    }
+
+                    $(this)
+                        .css(position);
+
+                    $(this).closest(selectors.component)
+                        .addClass(cssClasses.dropdownAlignment + alignedHorizontal)
+                        .addClass(cssClasses.dropdownAlignment + alignedVertical);
+                }
+            });
+
+        },
+
+        /**
+         * Sets focus to the first menu item (in fact its button) of dropdown
+         *
+         * @param $componentInstance {jQuery} instance of component to init on
+         * @private
+         */
+        _setFocusToTheFirstItem: function ($componentInstance) {
+            var module = this;
+            var selectors = module._options.selectors;
+
+            var $dropdownContainer = $componentInstance.find(selectors.dropdownContainer);
+            var $dropdownMenuItemNotDisabled = $dropdownContainer.find(selectors.dropdownMenuItemNotDisabled);
+            $dropdownMenuItemNotDisabled.eq(0).focus();
+        },
+
+        /**
+         * reads and returns data- attributes designated to configure context menu position
+         * Designated data- attributes:
+         * data-position-my
+         * data-position-at
+         * data-position-collision
+         * data-position-within
+         *
+         * @param $component - jQuery object representing individual Context menu button
+         * @private
+         */
+        _getComponentsPositionDataAttributes: function ($component) {
+            var acceptedAttributes = ["positionMy", "positionAt", "positionCollision", "positionWithin"];
+            var allDataAttributes = $component.data();
+            var filteredObj = {};
+
+            for (var key in allDataAttributes) {
+                for (var i in acceptedAttributes) {
+                    if (key === acceptedAttributes[i]) {
+                        filteredObj[key] = allDataAttributes[key];
+                    }
+                }
+            }
+
+            return filteredObj;
+        },
+        /**
+         * Initializes the component on a given DOM fragment.
+         *
+         * @param fragment {String|jQuery|DOMElement} the DOM fragment to initialize this component in
+         */
+        init: function (fragment) {
+            var module = this;
+
+            var $fragment = $(fragment);
+
+            module._initEvents($fragment);
+        }
+    });
+
+    ns.EventDomReady.subscribe('prj1136Html', {}, function(e, fragment){
+        var widget = ns.ContextMenuButton;
+        if(typeof widget !== "undefined") {
+            var options = {};
+
+            widget.initWidget(options, fragment);
+        }
+    });
+})(window.PuiTheme, jQuery);

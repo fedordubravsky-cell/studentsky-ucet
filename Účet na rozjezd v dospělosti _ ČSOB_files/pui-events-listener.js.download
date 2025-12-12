@@ -1,0 +1,201 @@
+// the semi-colon at the start is a safety net against concatenated
+// scripts and/or other plugins which may not be closed properly.
+;
+// Init Namespaces
+window.PuiTheme = window.PuiTheme || {};
+
+(function (ns, $) {
+    "use strict";
+
+    /**
+     * Events listener reacts to events received from various components or portlets
+     * on page. Note that there are situations when event is received before domready!
+     *
+     * Dependencies: jQuery
+
+     * @param options {JSON} widget configuration options
+     * @constructor
+     */
+    ns.PuiEventsListener = function (options) {
+        var module = this;
+
+        module._options = $.extend({}, module._defaults, options || {});
+    };
+
+    /**
+     * Widget static init methods
+     */
+    $.extend(ns.PuiEventsListener, {
+        _instances: {},
+        _defaultInstance: '_default',
+
+        /**
+         * Initializes the widget.
+         * If an instance with the given name does not exist, creates an instance with the given configuration.
+         * Executes the widget initialization on the specified DOM fragment.
+         *
+         * @param options {JSON} widget configuration options
+         * @param instanceName {String?} the widget instance identifier
+         */
+        initWidget: function (options, instanceName) {
+            var instance = ns.PuiEventsListener._getInstance(instanceName);
+
+            if (typeof instance === "undefined") {
+                instance = new ns.PuiEventsListener(options);
+                ns.PuiEventsListener._setInstance(instance, instanceName);
+            }
+            instance.init()
+        },
+
+        /**
+         * Returns the widget instance object.
+         * May return undefined if not yet initialized.
+         *
+         * @param instanceName {String?} the widget instance identifier
+         * @return {undefined|PuiTheme.PuiEventsListener} widget instance
+         * @private
+         */
+        _getInstance: function (instanceName) {
+            if (typeof instanceName === "undefined") {
+                instanceName = ns.PuiEventsListener._defaultInstance;
+            }
+            return ns.PuiEventsListener._instances[instanceName];
+        },
+
+        /**
+         * Stores the widget instance object.
+         *
+         * @param instance {PuiTheme.PuiEventsListener} the widget instance
+         * @param instanceName {String?} the widget instance identifier
+         * @private
+         */
+        _setInstance: function (instance, instanceName) {
+            if (typeof instanceName === "undefined") {
+                instanceName = ns.PuiEventsListener._defaultInstance;
+            }
+            ns.PuiEventsListener._instances[instanceName] = instance;
+        }
+    });
+
+    $.extend(ns.PuiEventsListener.prototype, {
+        _defaults: {
+            selectors: {
+                html: 'html, body', // both as workaround for some browsers
+                componentCtaBlockCall: '.pui-m-cta-block',
+                componentCtaBlockOpen: '.html-c-cta-block.pui-js-call-me',
+                calcLoader: '.npw-loader-holder'
+            },
+            cssClasses: {
+                isExpanded: 'html-is-expanded'
+            }
+        },
+        _attributes: {
+        },
+        _data: {},
+        _options: {}, // constructed in _init()
+        _eventNamespace: '.PuiEventsListener',
+
+        /**
+         * Scroll to viewport where is CTA
+         * @private
+         */
+
+        _ctaBlockToViewport: function () {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+
+            var domReady = false;
+            var calcReady = false;
+            var numIter = 0;
+            var maxIter = 20;
+            var timerDOMReady = setInterval(function() {
+
+                // Check if DOM ready
+                if (jQuery.isReady) {
+                    var $componentCtaBlockCall = $(selectors.componentCtaBlockCall);
+
+                    if ($componentCtaBlockCall.length) {
+                        ns.ScrollHelper.scrollToView($componentCtaBlockCall);
+                        domReady = true;
+                    }
+                }
+
+                // Check if calculator on page
+                if($(selectors.calcLoader).length !== 0) {
+                    // Check if loader calculator is displayed
+                    if ($(selectors.calcLoader).css('display') === "none") {
+                        calcReady = true;
+                    }
+                } else {
+                    calcReady = true;
+                }
+
+                // Clear iteration when is all loaded with backdoor
+                if( (domReady && calcReady) || (numIter === maxIter) ) {
+                    clearInterval(timerDOMReady);
+                }
+
+                numIter++;
+            }, 200);
+        },
+
+        /**
+         * Subscribe to documents events of interest:
+         * - puiCtaToScrollViewport
+         *
+         * @private
+         */
+        _subscribeEvents: function () {
+            var module = this;
+
+            // event is fired by several components and also
+            // by CTA portlet directly from inline script without domready event
+            ns.EventsCommon.subscribe('puiCtaToScrollViewport', {}, function(e){
+                module._ctaBlockToViewport();
+            });
+        },
+
+        /**
+         * Scroll to viewport where is CTA and open CTA
+         * @private
+         */
+
+        _ctaBlockOpen: function () {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+            var cssClasses = options.cssClasses;
+
+            var $componentCtaBlockOpen = $(selectors.componentCtaBlockOpen);
+            $componentCtaBlockOpen.addClass(cssClasses.isExpanded);
+            ns.ScrollHelper.scrollToView($componentCtaBlockOpen);
+        },
+
+        /**
+         * Subscribe to documents events of interest:
+         * - puiCtaToViewport
+         *
+         * @private
+         */
+        _subscribeEventsOpenCta: function () {
+            var module = this;
+
+            // event is fired by several components and also
+            // by CTA portlet directly from inline script without domready event
+            ns.EventsCommon.subscribe('puiCtaToViewport', {}, function(e){
+                module._ctaBlockOpen();
+            });
+        },
+
+        /**
+         * Initializes the component on a given DOM fragment.
+         */
+        init: function () {
+            var module = this;
+
+            module._subscribeEvents();
+            module._subscribeEventsOpenCta();
+        }
+    });
+})(window.PuiTheme, jQuery);

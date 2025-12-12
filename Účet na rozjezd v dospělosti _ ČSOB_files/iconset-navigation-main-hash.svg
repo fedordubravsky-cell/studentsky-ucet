@@ -1,0 +1,10 @@
+<svg viewBox="0 0 68 34" width="68" height="34" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="icon" viewBox="0 0 24 24">
+        <path d="m19.32 2.08-.81 4.42h3.57c.51 0 .92.41.92.92 0 .5-.41.91-.92.91h-3.9l-1.33 7.33h3.4c.51 0 .92.41.92.92s-.41.92-.92.92h-3.74l-.86 4.74c-.09.5-.57.83-1.07.74s-.83-.57-.74-1.07l.81-4.41h-7.3l-.87 4.74c-.09.5-.56.83-1.06.74s-.83-.57-.74-1.06l.8-4.42h-3.56c-.51 0-.92-.41-.92-.92s.41-.92.92-.92h3.9l1.33-7.33h-3.41c-.5 0-.91-.41-.91-.92 0-.5.41-.91.91-.91h3.74l.87-4.75c.09-.5.57-.83 1.06-.74.5.1.83.57.74 1.07l-.8 4.42h7.3l.87-4.75c.09-.49.56-.82 1.06-.73s.83.56.74 1.06zm-10.31 6.25-1.33 7.33h7.3l1.34-7.33z" fill-rule="evenodd" stroke-width="0"/>
+    </symbol>
+    <rect width="68" height="34" x="0" y="0" fill="transparent" />
+    <rect width="24" height="24" x="5" y="5" fill="transparent" />
+    <rect width="24" height="24" x="39" y="5" fill="transparent" />
+    <use href="#icon" x="5" y="5" width="24" height="24" fill="white" stroke="white" />
+    <use href="#icon" x="39" y="5" width="24" height="24" fill="#0a77a9" stroke="#0a77a9" />
+</svg>

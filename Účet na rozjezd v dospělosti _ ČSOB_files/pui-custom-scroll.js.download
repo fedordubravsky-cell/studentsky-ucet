@@ -1,0 +1,163 @@
+// the semi-colon at the start is a safety net against concatenated
+// scripts and/or other plugins which may not be closed properly.
+;
+// Init Namespaces
+window.PuiTheme = window.PuiTheme || {};
+
+(function (ns, $) {
+    "use strict";
+
+    /**
+     * Custom scroll
+     *
+     * Dependencies: jQuery
+
+     * @param options {JSON} widget configuration options
+     * @constructor
+     */
+    ns.CustomScroll = function (options) {
+        var module = this;
+
+        module._options = $.extend({}, module._defaults, options || {});
+    };
+
+    /**
+     * Widget static init methods
+     */
+    $.extend(ns.CustomScroll, {
+        _instances: {},
+        _defaultInstance: '_default',
+
+        /**
+         * Initializes the widget.
+         * If an instance with the given name does not exist, creates an instance with the given configuration.
+         * Executes the widget initialization on the specified DOM fragment.
+         *
+         * @param options {JSON} widget configuration options
+         * @param fragment {String|jQuery|DOMElement} the DOM fragment selector, jQuery object or DOM element
+         * @param instanceName {String?} the widget instance identifier
+         */
+        initWidget: function (options, fragment, instanceName) {
+            var instance = ns.ScrollToCta._getInstance(instanceName);
+
+            if (typeof instance === "undefined") {
+                instance = new ns.CustomScroll(options);
+                ns.CustomScroll._setInstance(instance, instanceName);
+            }
+
+            instance.init(fragment)
+        },
+
+        /**
+         * Returns the widget instance object.
+         * May return undefined if not yet initialized.
+         *
+         * @param instanceName {String?} the widget instance identifier
+         * @return {undefined|PuiTheme.CustomScroll} widget instance
+         * @private
+         */
+        _getInstance: function (instanceName) {
+            if (typeof instanceName === "undefined") {
+                instanceName = ns.CustomScroll._defaultInstance;
+            }
+
+            return ns.CustomScroll._instances[instanceName];
+        },
+
+        /**
+         * Stores the widget instance object.
+         *
+         * @param instance {PuiTheme.CustomScroll} the widget instance
+         * @param instanceName {String?} the widget instance identifier
+         * @private
+         */
+        _setInstance: function (instance, instanceName) {
+            if (typeof instanceName === "undefined") {
+                instanceName = ns.CustomScroll._defaultInstance;
+            }
+
+            ns.CustomScroll._instances[instanceName] = instance;
+        }
+    });
+
+    $.extend(ns.CustomScroll.prototype, {
+        _defaults: {
+            selectors: {
+                component: '.html-is-linked-to-custom',
+                componentHeading: '.html-c-heading',
+                componentStickyMenu: '.html-c-sticky-menu'
+            }
+        },
+
+        _options: {}, // constructed in _init()
+        _eventNamespace: '.CustomScroll',
+
+        /**
+         * Init Split Button events.
+         * - display / hide navigation window
+         *
+         * @private
+         */
+        _clickButtonCustomScroll: function () {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+            var $button = $(selectors.component);
+            $button
+                .off("click" + module._eventNamespace)
+                .on("click" + module._eventNamespace, function (e) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    var $componentScrollToCustom = $($(this).attr("href"));
+                    if($componentScrollToCustom.length !== 0) {
+                        ns.ScrollHelper.scrollToView($componentScrollToCustom);
+                        module._trackButtonClick(e.target);
+                    }
+                });
+
+        },
+
+        /**
+         * Send Digital tracking information
+         *
+         * @param {Object} anchor HTML element
+         * @private
+         */
+        _trackButtonClick: function (anchor) {
+            // handle differently links in html-c-heading or in html-c-sticky-menu
+            var isWantToApplyButton =
+                $(anchor).parents(this._options.selectors.componentHeading).length > 0
+                || $(anchor).parents(this._options.selectors.componentStickyMenu).length > 0;
+            var trackingData = {
+                action: isWantToApplyButton ? "iWantToApply" : "anchorClick"
+            };
+
+            if (!isWantToApplyButton) {
+                trackingData.anchorText = $(anchor).text()
+            }
+
+            // notify tracking API
+            if (typeof window.measure === "function") {
+                window.measure(trackingData);
+            }
+        },
+
+        /**
+         * Initializes the component on a given DOM fragment.
+         *
+         */
+        init: function () {
+            var module = this;
+            module._clickButtonCustomScroll();
+
+        }
+    });
+})(window.PuiTheme, jQuery);
+
+(function (ns, $) {
+    $(function () {
+        if (typeof ns.CustomScroll !== "undefined") {
+            ns.CustomScroll.initWidget();
+        }
+    });
+})(window.PuiTheme, jQuery);

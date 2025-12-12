@@ -1,0 +1,242 @@
+/**
+ * Scroll indicator support script.
+ * Controls scroll indicator arrow for scrollable containers on mobile devices.
+ *
+ * Uses jQuery
+ *
+ * Dependencies: jQuery
+ *
+ * @version 1.0
+ */
+
+/**
+ * the semi-colon at the start is a safety net against concatenated
+ * scripts and/or other plugins which may not be closed properly.
+ */
+
+/**
+ * JS namespace init
+ * @type {{}|*}
+ */
+window.PuiTheme = window.PuiTheme || {};
+(function (ns, $) {
+    "use strict";
+
+    ns.NpwScrollIndicator = function () {
+        this._init();
+    };
+
+    $.extend(ns.NpwScrollIndicator.prototype, {
+        _defaults: {
+            selectors: {
+                scrollContainer: '.pui-table',
+                puiStart: '.pui-bar-start',
+                puiEnd: '.pui-bar-end',
+                puiBar: '.pui-bar'
+            },
+            cssClasses: {
+                scrollIndicator: 'pui-scroll-indicator',
+                positionStart: 'pui-is-start',
+                positionProgress: 'pui-is-progress',
+                positionEnd: 'pui-is-end',
+                // status class added when scrolling
+                stateScrolling: 'pui-is-scrolling'
+            },
+            dataAttr: {
+                scrollTimer: 'scrollTimer'
+            },
+            markup: {
+                containerWrapper: '<div class="pui-table-wrap"></div>',
+                verticalSlideBars: '<div class="pui-bar pui-bar-start"></div><div class="pui-bar pui-bar-end"></div>'
+            },
+            positionBufferLeft: 1, // number of px from left edge, when state is considered at the beginning
+            positionBufferRight: 1, // number of px from right edge, when state is considered at the end
+            slideTabSpeed: 500, // speed of vertical scroll
+            indicator: {}, // speed of vertical scroll
+            slideTabDistance: '300px', // distance of vertical scroll
+            eventNamespace: '.scrollIndicator'
+        },
+        _options: {},
+
+        /**
+         * Initializes the menu
+         *
+         * @constructor
+         */
+        _init: function (options) {
+            var module = this;
+
+            module._options = $.extend({}, module._defaults, options || {});
+
+            // skip script if no scroll containers found
+            var $scrollContainers = $(module._options.selectors.scrollContainer);
+            $scrollContainers.each(function () {
+                var $container = $(this);
+                // parent is always indicator because it has just been wrapped
+
+                module._domScrollBarsConstruct($container);
+                module._bindScrollButtonsEvents();
+                module._setCurrentPosition(module._options.indicator, $container);
+                module._bindScrollEvents(module._options.indicator, $container);
+            });
+            module._bindResizePageEvents();
+        },
+
+        /**
+         * Sets default scrollbar position settings (CSS class etc.)
+         *
+         * @param $indicator {jQuery} indicator element
+         * @param $container {jQuery} wrapped element
+         * @private
+         */
+        _setCurrentPosition: function ($indicator, $container) {
+            var module = this;
+            var options = module._options;
+            var cssClasses = options.cssClasses;
+            var leftEdge = $container.scrollLeft();
+            var minThreshold = options.positionBufferLeft;
+            var maxThreshold = $container.prop("scrollWidth") - options.positionBufferRight - $container.width();
+
+            // right threshold cannot be smaller than left threshold
+            minThreshold = Math.min(minThreshold, maxThreshold, 1);
+
+            /* this is not exact, but approximatelly enough */
+            var isStart = (leftEdge < minThreshold);
+            var isEnd = (leftEdge > maxThreshold);
+            var isProgress = !(isStart || isEnd);
+
+            $indicator
+                .toggleClass(cssClasses.positionStart, isStart)
+                .toggleClass(cssClasses.positionProgress, isProgress)
+                .toggleClass(cssClasses.positionEnd, isEnd);
+        },
+
+        /**
+         * Method binds scroll events for scrollable containers. Over top of each container
+         * is placed arrow indicating ability to scroll. When scrolling, arrow changes
+         * its state and CSS defined look. When reached end part of scrollbar, class and (possibly)
+         * CSS look is changed.
+         *
+         * Method uses timeout checking to detect scrolling
+         *
+         * @param $indicator {jQuery} indicator element
+         * @param $container {jQuery} wrapped element
+         * @private
+         */
+        _bindScrollEvents: function ($indicator, $container) {
+            var module = this;
+            var options = module._options;
+            var cssClasses = options.cssClasses;
+
+            $container
+                .off("scroll" + options.eventNamespace)
+                .on("scroll" + options.eventNamespace, function () {
+                    $indicator.addClass(cssClasses.stateScrolling);
+                    clearTimeout($indicator.data(options.dataAttr.scrollTimer));
+                    $indicator.data(options.dataAttr.scrollTimer, setTimeout(function () {
+                        $indicator.removeClass(cssClasses.stateScrolling);
+                        module._setCurrentPosition($indicator, $container);
+                    }, 250));
+                });
+        },
+
+        /**
+         * Scroll by buttons on side
+         *
+         * @private
+         */
+        _bindScrollButtonsEvents: function () {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+
+            $(selectors.puiStart)
+                .off("click" + options.eventNamespace)
+                .on("click" + options.eventNamespace, function () {
+                    $(this).siblings(options.scrollContainer).animate({
+                        scrollLeft: '+='+options.slideTabDistance
+                    }, options.slideTabSpeed, 'swing');
+                });
+
+            $(selectors.puiEnd)
+                .off("click" + options.eventNamespace)
+                .on("click" + options.eventNamespace, function () {
+                    $(this).siblings(options.scrollContainer).animate({
+                        scrollLeft: '-='+options.slideTabDistance
+                    }, options.slideTabSpeed, 'swing');
+                });
+        },
+
+        /**
+         * Bind event waiting for resize
+         *
+         * @private
+         */
+        _bindResizePageEvents: function () {
+            var module = this;
+            var options = module._options;
+            var resizeTimer = null;
+
+            $(window)
+                .off("resize" + options.eventNamespace)
+                .on("resize" + options.eventNamespace, function () {
+                    // delayed resize
+                    if (!resizeTimer) {
+                        resizeTimer = setTimeout(function () {
+                            // remove bars
+                            module._domScrollBarsDestroy();
+                            // generate bars
+                            module._init();
+                            // reset timer
+                            resizeTimer = null;
+                        }, 2000);
+                    }
+                });
+        },
+
+        /**
+         * Add nodes and classes for slider bars
+         *
+         * @private
+         */
+        _domScrollBarsConstruct: function ($container) {
+            var module = this;
+            // wrap container
+            $container.wrap(module._options.markup.containerWrapper);
+            module._options.indicator = $container.parent();
+            // insert verticar bars for slide
+            module._options.indicator.append(module._options.markup.verticalSlideBars);
+
+            if(Math.round($container.width()) < $container.prop("scrollWidth")) {
+                module._options.indicator.addClass(module._options.cssClasses.scrollIndicator);
+            }
+        },
+
+        /**
+         * Remove nodes and styling for slider bars
+         *
+         * @private
+         */
+        _domScrollBarsDestroy: function ($container) {
+            var module = this;
+            // wrap container
+
+            $('.pui-bar').remove();
+            $('.pui-table-wrap').children('.pui-table').unwrap();
+        }
+    });
+
+    // TODO: Move to common JS init file
+    $(function () {
+        var indicatorOptions = {
+            selectors: {
+                scrollContainer: '.pui-table'
+            },
+            positionBufferLeft: 20,
+            positionBufferRight: 20
+        };
+
+        new ns.NpwScrollIndicator(indicatorOptions);
+    });
+
+})(window.PuiTheme, jQuery);

@@ -1,0 +1,181 @@
+/**
+ * FRM017 - Datepicker
+ *
+ * Provides component with interactive date overlay selector
+ *
+ * Dependencies: jQuery, jQuery UI
+ *
+ * @version 1.0
+ */
+// the semi-colon at the start is a safety net against concatenated
+// scripts and/or other plugins which may not be closed properly.
+;
+// Init Namespaces
+window.PuiTheme = window.PuiTheme || {};
+
+(function (ns, $) {
+    "use strict";
+
+    /**
+     * PuiDatePicker constructor
+     *
+     * @param options {Object} initialization options
+     * @constructor
+     * @see PuiDatePicker#_defaults
+     */
+    ns.PuiDatePicker = function (options) {
+        this._init(options);
+    };
+
+    $.extend(ns.PuiDatePicker.prototype, {
+
+        /**
+         * Default options for the PuiDatePicker object.
+         *
+         * <ul>
+         * <li><b>componentSelector</b> - Specifies class of component element
+         *     <i>Default: .pdp-datepicker</i></li>
+         * <li><b>dateFormat</b> - Format of string after date selection. See jQuery UI DatePicker docs for more
+         *     <i>Default: 'yy-mm-dd'</i></li>
+         * <li><b>minDate</b> - Date object defining minimal selectable date
+         *     <i>Default: Date()</i></li>
+         * </ul>
+         * <li><b>firstDay</b> - defines start day of week, 0=sun, 1 = mon, 2=tue etc.
+         *     <i>Default: 1</i></li>
+         * <li><b>currentText</b> - text label for today's date
+         *     <i>Default: 'Today'</i></li>
+         * <li><b>closeText</b> - text label assigned to close button
+         *     <i>Default: 'Clone'</i></li>
+         * </ul>
+         *
+         * @private
+         */
+        _defaults: {
+            componentSelector: '.pdp-datepicker',
+            dateFormat: 'yy-mm-dd',
+            firstDay: 1,
+            locale: 'cs_CZ',
+            localization: {
+                cs_CZ: {
+                    closeText: 'Zavřít',
+                    prevText: '&#x3C;Dříve',
+                    nextText: 'Později&#x3E;',
+                    currentText: 'Dnes',
+                    monthNames: ['leden', 'únor', 'březen', 'duben', 'květen', 'červen',
+                        'červenec', 'srpen', 'září', 'říjen', 'listopad', 'prosinec'],
+                    monthNamesShort: ['led', 'úno', 'bře', 'dub', 'kvě', 'čer',
+                        'čvc', 'srp', 'zář', 'říj', 'lis', 'pro'],
+                    dayNames: ['neděle', 'pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota'],
+                    dayNamesShort: ['ne', 'po', 'út', 'st', 'čt', 'pá', 'so'],
+                    dayNamesMin: ['ne', 'po', 'út', 'st', 'čt', 'pá', 'so'],
+                    weekHeader: 'Týd',
+                    dateFormat: 'dd.mm.yy',
+                    firstDay: 1,
+                    isRTL: false,
+                    showMonthAfterYear: false,
+                    yearSuffix: ''
+                },
+                en_GB: {
+                    closeText: 'Done',
+                    prevText: 'Prev',
+                    nextText: 'Next',
+                    currentText: 'Today',
+                    monthNames: ['January', 'February', 'March', 'April', 'May', 'June',
+                        'July', 'August', 'September', 'October', 'November', 'December'],
+                    monthNamesShort: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                    dayNames: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+                    dayNamesShort: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+                    dayNamesMin: ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'],
+                    weekHeader: 'Wk',
+                    dateFormat: 'dd/mm/yy',
+                    firstDay: 1,
+                    isRTL: false,
+                    showMonthAfterYear: false,
+                    yearSuffix: ''
+                }
+            }
+        },
+
+        /**
+         * Returns the localization of the datepicker based on the given locale. If locale not found,
+         * empty object is returned.
+         *
+         * @param locale the requested locale (Java Locale format)
+         * @return {object} datepicker localization options
+         * @private
+         */
+        _getLocalization: function (locale) {
+            var module = this;
+            var localization = module.options.localization[locale];
+
+            // only apply localization if defined
+            if ($.isPlainObject(localization)) {
+                $.datepicker.setDefaults(localization);
+            }
+        },
+
+        /**
+         * Initializes the widget using the supplied options.
+         *
+         * @param options {object} initialization options
+         * @see PuiDatePicker#_defaults
+         * @private
+         */
+        _init: function (options) {
+            var widget = this;
+
+            widget.options = $.extend({}, widget._defaults, options || {});
+
+            var $datepickers = $(widget.options.componentSelector);
+            $datepickers.each(function () {
+                var $datepicker = $(this);
+                var technicalDateFormat = "d.m.yy";
+
+                // min date
+                var minDate;
+                var minDateAttr = $datepicker.data("date-min");
+                if (typeof minDateAttr === "string" && minDateAttr !== "") {
+                    try {
+                        minDate = $.datepicker.parseDate(technicalDateFormat, minDateAttr);
+                    } catch (e) {
+                        console.log("Failed to convert date["+minDateAttr+"] with format["+technicalDateFormat+"].");
+                    }
+                }
+
+                // max date
+                var maxDate;
+                var maxDateAttr = $datepicker.data("date-max");
+                if (typeof maxDateAttr === "string" && maxDateAttr !== "") {
+                    try {
+                        maxDate = $.datepicker.parseDate(technicalDateFormat, maxDateAttr);
+                    } catch (e) {
+                        console.log("Failed to convert date["+maxDateAttr+"] with format["+technicalDateFormat+"].");
+                    }
+                }
+
+                // date format string
+                var dateFormat = widget.options.dateFormat;
+                var dateFormatAttr = $datepicker.data("date-format");
+                if (typeof dateFormatAttr === "string" && dateFormatAttr !== "") {
+                    dateFormat = dateFormatAttr;
+                }
+
+                var datepickerOptions = {
+                    inline: false,
+                    dateFormat: dateFormat,
+                    minDate: minDate,
+                    maxDate: maxDate,
+                    firstDay: widget.options.firstDay,
+                    showButtonPanel: true
+                };
+
+                var localization = widget._getLocalization(widget.options.locale);
+
+                $datepicker.datepicker($.extend({}, datepickerOptions, localization));
+            });
+
+        }
+    });
+
+})(window.PuiTheme, jQuery);

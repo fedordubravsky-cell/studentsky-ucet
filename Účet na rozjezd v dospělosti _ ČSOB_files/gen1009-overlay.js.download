@@ -1,0 +1,347 @@
+// the semi-colon at the start is a safety net against concatenated
+// scripts and/or other plugins which may not be closed properly.
+;
+// Init Namespaces
+window.PuiTheme = window.PuiTheme || {};
+
+(function (ns, $) {
+    "use strict";
+
+    /**
+     * Component - GEN1009 Overlay
+     *
+     * Dependencies: jQuery
+     *
+     * @version 1.0.0
+     *
+     * @param options {JSON} widget configuration options
+     * @constructor
+     */
+    ns.Overlays = function (options) {
+        var module = this;
+
+        // deep copy of options
+        module._options = $.extend(true,{}, module._defaults, options || {});
+    };
+
+    /**
+     * Widget static init methods
+     */
+    $.extend(ns.Overlays, {
+        _instances: {},
+        _defaultInstance: '_default',
+
+        /**
+         * Initializes the widget.
+         * If an instance with the given name does not exist, creates an instance with the given configuration.
+         * Executes the widget initialization on the specified DOM fragment.
+         *
+         * @param options {JSON} widget configuration options
+         * @param fragment {String|jQuery|DOMElement} the DOM fragment selector, jQuery object or DOM element
+         * @param instanceName {String?} the widget instance identifier
+         */
+        initWidget: function (options, fragment, instanceName) {
+            var instance = ns.Overlays._getInstance(instanceName);
+
+            if (typeof instance === "undefined") {
+                instance = new ns.Overlays(options);
+                ns.Overlays._setInstance(instance, instanceName);
+                instance.init($(fragment), instanceName);
+           }
+        },
+
+        /**
+         * Returns the widget instance object.
+         * May return undefined if not yet initialized.
+         *
+         * @param instanceName {String?} the widget instance identifier
+         * @return {undefined|PuiTheme.Overlays} widget instance
+         * @private
+         */
+        _getInstance: function (instanceName) {
+            if (typeof instanceName === "undefined") {
+                instanceName = ns.Overlays._defaultInstance;
+            }
+
+            return ns.Overlays._instances[instanceName];
+        },
+
+        /**
+         * Stores the widget instance object.
+         *
+         * @param instance {PuiTheme.Overlays} the widget instance
+         * @param instanceName {String?} the widget instance identifier
+         * @private
+         */
+        _setInstance: function (instance, instanceName) {
+            if (typeof instanceName === "undefined") {
+                instanceName = ns.Overlays._defaultInstance;
+            }
+
+            ns.Overlays._instances[instanceName] = instance;
+        },
+
+        /**
+         * Open overlay
+         *
+         * @param instanceName {String?} the widget instance identifier
+         * @public
+         */
+        open: function (instanceName) {
+            var module = this;
+            module._instances[instanceName]._showOverlay();
+        },
+
+        /**
+         * Close overlay
+         *
+         * @param instanceName {String?} the widget instance identifier
+         * @param trackingOptions {Object} Digital Tracking data object
+         * @public
+         */
+        close: function (instanceName, trackingOptions) {
+            var module = this;
+            module._instances[instanceName]._hideOverlay();
+
+            if (typeof trackingOptions !== 'undefined') {
+                module._instances[instanceName]._callMeasure(trackingOptions);
+            }
+        },
+
+        /**
+         * Close all overlay
+         *
+         * @private
+         */
+        closeAll: function () {
+            var module = this;
+
+            if (module._instances !== undefined) {
+                for (var instanceName in module._instances) {
+                    module._instances[instanceName]._hideOverlay();
+                }
+            }
+        }
+    });
+
+    $.extend(ns.Overlays.prototype, {
+        _defaults: {
+            storageNamespace: "overlays",
+            defaultOverlayId: 'default-overlay-id',
+            selectors: {
+                overlayBoxes: ".html-c-overlay",
+                closeButton: ".html-button-close"
+            },
+            classes: {
+                isActive: "html-is-active",
+                isInactive: "html-is-inactive"
+            },
+            dataAttr: {
+                overlayId: "overlay-id"
+            },
+            callbackFunc: undefined,
+            $element: undefined,
+            instanceName: undefined,
+            lastFocusedElement: undefined,
+            tracking: {
+                enableTracking: false,
+                trackingDataCustom: {},
+                trackingClosingMethodHeaderButton: 'overlayClosingMethodHeaderButton',
+                trackingClosingMethodEscapeKey: 'overlayClosingMethodEscapeKey',
+                trackingClosingMethodOutsideClick: 'overlayClosingMethodOutsideClick',
+                trackingErrorType: 'overlayDisplayError',
+                trackingOverlayFailed: 'overlayFailed',
+                trackingOverlayDisplayed: 'overlayDisplayed',
+                trackingOverlayCancelled: 'overlayCancelled'
+            },
+            eventNamespace: ".overlays"
+        },
+        _options: {}, // constructed in init()
+
+        /**
+         * Initializes the component on a given DOM fragment.
+         *
+         * @param $element {jQuery}
+         * @param instanceName String
+         */
+        init: function ($element, instanceName) {
+            // Init configuration
+            var module = this;
+            module._options.$element = $element;
+            module._options.instanceName = instanceName;
+            module._bindCloseOverlay();
+        },
+
+        /**
+         * Binds the overlay close events.
+         *
+         * @private
+         */
+        _bindCloseOverlay: function () {
+            var module = this;
+            var $overlayElement = module._options.$element;
+            var instanceName = module._options.instanceName;
+            var eventOptions = {
+                instanceName: instanceName
+            }
+
+            // close click
+            var $closeElement = $(module._options.selectors.closeButton, $overlayElement);
+
+            $closeElement
+                .off("click" + module._options.eventNamespace)
+                .on("click" + module._options.eventNamespace, eventOptions, function (event) {
+                    ns.Overlays.close(event.data.instanceName);
+
+                    var trackingData = $.extend(true,{}, module._options.tracking.trackingDataCustom);
+                    trackingData.action = module._options.tracking.trackingOverlayCancelled;
+                    trackingData.closingMethod = module._options.tracking.trackingClosingMethodHeaderButton;
+
+                    module._callMeasure(trackingData);
+                });
+
+            // ESC
+            // FIXME: could not work well on multiple overlays open - one keystroke closes them all
+            $(document)
+                .off("keydown" + module._options.eventNamespace)
+                .on("keydown" + module._options.eventNamespace, function (e) {
+                    if(e.keyCode === 27) {
+                        ns.Overlays.closeAll();
+
+                        var trackingData = $.extend(true,{}, module._options.tracking.trackingDataCustom);
+                        trackingData.action = module._options.tracking.trackingOverlayCancelled;
+                        trackingData.closingMethod = module._options.tracking.trackingClosingMethodEscapeKey;
+                        module._callMeasure(trackingData);
+                    }
+                });
+
+            // Click outside modal
+            $overlayElement
+                .off("click" + module._options.eventNamespace)
+                .on("click" + module._options.eventNamespace, eventOptions, function (event) {
+                    if (event.target === this) {
+                        ns.Overlays.close(event.data.instanceName);
+
+                        var trackingData = $.extend(true,{}, module._options.tracking.trackingDataCustom);
+                        trackingData.action = module._options.tracking.trackingOverlayCancelled;
+                        trackingData.closingMethod = module._options.tracking.trackingClosingMethodOutsideClick;
+                        module._callMeasure(trackingData);
+                    }
+                });
+        },
+
+        /**
+         * Returns the widget instance identifier.
+         * May return undefined if not yet initialized.
+         *
+         * @return {string} the widget instance identifier
+         * @public
+         */
+        getInstanceName: function () {
+            var module = this;
+            return module._options.instanceName;
+        },
+
+        /**
+         * Returns the widget instance selector.
+         * May return undefined if not yet initialized.
+         *
+         * @return {string} the widget instance selector
+         * @public
+         */
+        getInstanceElement: function () {
+            var module = this;
+            return module._options.$element;
+        },
+
+        /**
+         * Shows overlay by changing classes
+         *
+         * @private
+         */
+        _showOverlay: function () {
+            var module = this;
+            var $overlayElement = module._options.$element;
+            $overlayElement.removeClass(module._options.classes.isInactive);
+            $overlayElement.addClass(module._options.classes.isActive);
+
+            module._options.lastFocusedElement = document.activeElement;
+
+            var trackingData = $.extend(true,{}, module._options.tracking.trackingDataCustom);
+
+            if ($('#' + module._options.instanceName).length === 0) {
+                trackingData.action = module._options.tracking.trackingOverlayFailed;
+                trackingData.errorType = [module._options.tracking.trackingErrorType];
+                module._callMeasure(trackingData);
+            } else {
+                trackingData.action = module._options.tracking.trackingOverlayDisplayed;
+                module._callMeasure(trackingData);
+            }
+
+            var $openingButton = $(module._options.lastFocusedElement).closest('.html-c-button');
+            var buttonText = $openingButton.text().trim();
+            var buttonId = $openingButton.attr('data-html-overlay-id') || $overlayElement.attr('id');
+            var buttonType = $openingButton.attr('data-action-type');
+
+            // TODO: MDv - workaround for measure function because tracking for callMeasure is always disabled
+            window.measure({
+                action: "buttonClick",
+                buttonType: buttonType,
+                buttonId: buttonId,
+                buttonText: buttonText
+            });
+        },
+
+        /**
+         * Hides overlay by changing classes
+         *
+         * @private
+         */
+        _hideOverlay: function () {
+            var module = this;
+            var $overlayElement = module._options.$element;
+
+            if ($overlayElement.hasClass(module._options.classes.isActive)) {
+                $overlayElement.removeClass(module._options.classes.isActive);
+                $overlayElement.addClass(module._options.classes.isInactive);
+
+                // call callback
+                var callback = module._options.callbackFunc;
+
+                if (typeof callback === 'function') {
+                    callback(module);
+                }
+            }
+
+            var lastFocusedElement = module._options.lastFocusedElement;
+            if (lastFocusedElement) {
+                lastFocusedElement.focus();
+            }
+
+        },
+
+        /**
+         * Call digital tracking
+         *
+         * @param {Object} data - data object for digital tracking
+         * @private
+         */
+        _callMeasure: function (data) {
+            var module = this;
+
+            if (module._options.tracking.enableTracking && typeof window.measure === 'function') {
+                try {
+                    window.measure(data);
+                } catch (err) {
+                    console.warn("Error while calling 'measure': " + err);
+                }
+            }
+        }
+    });
+})(window.PuiTheme, jQuery);
+
+(function (ns, $) {
+    if (typeof ns.Overlays !== "undefined") {
+        ns.Overlays.initWidget();
+    }
+})(window.PuiTheme, jQuery);

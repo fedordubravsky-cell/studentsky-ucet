@@ -1,0 +1,314 @@
+// the semi-colon at the start is a safety net against concatenated
+// scripts and/or other plugins which may not be closed properly.
+;
+// Init Namespaces
+window.PuiTheme = window.PuiTheme || {};
+
+(function (ns, $) {
+    "use strict";
+
+    /**
+     * PUI PSP in page navigation
+     *
+     * Dependencies (init): jQuery
+     * Dependencies (runtime): PuiTheme.ScrollHelper
+     *
+     * @param options {JSON} widget configuration options
+     * @constructor
+     */
+    ns.InPageNavigation = function (options) {
+        var widget = this;
+        widget._initInPageNavigation(options);
+    };
+
+    /**
+     * Widget static init methods
+     */
+    $.extend(ns.InPageNavigation, {
+        _instances: {},
+        _defaultInstance: '_default',
+
+        /**
+         * Initializes the widget.
+         * If an instance with the given name does not exist, creates an instance with the given configuration.
+         * Executes the widget initialization on the specified DOM fragment.
+         *
+         * @param options {JSON} widget configuration options
+         * @param fragment {String|jQuery|DOMElement} the DOM fragment selector, jQuery object or DOM element
+         * @param instanceName {String?} the widget instance identifier
+         */
+        initWidget: function (options, fragment, instanceName) {
+            var instance = ns.InPageNavigation._getInstance(instanceName);
+
+            if (typeof instance === "undefined") {
+                instance = new ns.InPageNavigation(options);
+                ns.InPageNavigation._setInstance(instance, instanceName);
+            }
+
+            instance.init(fragment)
+        },
+
+        /**
+         * Returns the widget instance object.
+         * May return undefined if not yet initialized.
+         *
+         * @param instanceName {String?} the widget instance identifier
+         * @return {undefined|InPageNavigation} widget instance
+         * @private
+         */
+        _getInstance: function (instanceName) {
+            if (typeof instanceName === "undefined") {
+                instanceName = ns.InPageNavigation._defaultInstance;
+            }
+
+            return ns.InPageNavigation._instances[instanceName];
+        },
+
+        /**
+         * Stores the widget instance object.
+         *
+         * @param instance {InPageNavigation} the widget instance
+         * @param instanceName {String?} the widget instance identifier
+         * @private
+         */
+        _setInstance: function (instance, instanceName) {
+            if (typeof instanceName === "undefined") {
+                instanceName = ns.InPageNavigation._defaultInstance;
+            }
+
+            ns.InPageNavigation._instances[instanceName] = instance;
+        }
+    });
+
+    $.extend(ns.InPageNavigation.prototype, {
+        _defaults: {
+            // selectors
+            selectors: {
+                inPageNavScope: '.pui-has-in-page-navigation',
+                inPageNavMenu: '.pui-js-inpage-navigation',
+                inPageNavNavigationLinks: 'ul,ol',
+                inPageNavLink: 'ul > li > a,ol > li > a',
+                inPageNavToTopLink: '.pui-js-inpage-nav-link-top',
+                inPageNavInclude: '[data-inpage-nav-include]'
+            },
+            // css classes
+            cssClasses: {
+                inPageNavToTopLinkClass: 'html-c-inpage-nav-link-top pui-js-inpage-nav-link-top'
+            },
+            // identificators
+            identificators: {
+                inPageNavIdPrefix: 'inpagenav'
+            },
+            // data attributes
+            dataAttr: {
+                inPageNavAttrNavigationInclude: 'inpage-nav-include',
+                inPageNavAttrNavigationCaption: 'inpage-nav-caption',
+                inPageNavAttrToTopCaption: 'inpage-nav-to-top-caption'
+            }
+        },
+        _options: { }, // constructed in _init()
+        _eventNamespace: '.InPageNavigation',
+
+        /**
+         * Init defined scope
+         *
+         * @private
+         */
+        _initScope: function () {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+            var $sections = $(selectors.inPageNavScope);
+
+            $sections.each(function (index, componentInstance) {
+                var $index = index;
+                var $componentInstance = $(componentInstance);
+
+                module._initAnchors($index, $componentInstance);
+                module._bindScrollEvents($componentInstance);
+            });
+        },
+
+        /**
+         * Find anchors
+         *
+         * @private
+         */
+        _initAnchors: function ($sectionIndex, $sectionInstance) {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+            var classes = options.cssClasses;
+            var identificators = options.identificators;
+            var dataAttr = options.dataAttr;
+
+            // Find data attribute
+            var $inPageNavItems = $sectionInstance.find(selectors.inPageNavInclude);
+            var $navigationMenu = $sectionInstance.find(selectors.inPageNavMenu);
+            var $navigationList = $navigationMenu.find(selectors.inPageNavNavigationLinks);
+            var inPageNavItemsCount = $inPageNavItems.length;
+            var sectionIndexIncrement = $sectionIndex + 1;
+
+            $navigationMenu.attr('id', identificators.inPageNavIdPrefix + '-' + sectionIndexIncrement);
+            $navigationList.empty();
+
+            for (var i = 0; i < inPageNavItemsCount; i++) {
+                var $inPageNavItem = $inPageNavItems.eq(i);
+                var includeElement = $inPageNavItem.data(dataAttr.inPageNavAttrNavigationInclude) === true; // sanitize attribute value
+
+                // include only marked elements:
+                if (includeElement) {
+                    // Get data from sub navigation headline
+                    var inPageNavContent = $inPageNavItem.text();
+                    var inPageNavCustomCaption = $inPageNavItem.data(dataAttr.inPageNavAttrNavigationCaption);
+                    var inPageNavCustomBackToTopCaption = $inPageNavItem.data(dataAttr.inPageNavAttrToTopCaption);
+                    var inPageNavItemIndexIncrement = i + 1;
+
+                    // Defined caption of links
+                    var inPageNavLinkCaption = inPageNavCustomCaption ? inPageNavCustomCaption : inPageNavContent;
+                    var inPageNavBackToTopLinkCaption = inPageNavCustomBackToTopCaption ? inPageNavCustomBackToTopCaption : '&#10514;';
+
+                    // Append link to navigation
+                    var $inPageNavLinksElement = $('<li><a href="#' + identificators.inPageNavIdPrefix + '-' + sectionIndexIncrement + '-' + inPageNavItemIndexIncrement + '">' + inPageNavLinkCaption + '</a></li>');
+                    $navigationList.append($inPageNavLinksElement);
+
+                    // Add ID to sub navigation headline element
+                    $inPageNavItem.attr('id', identificators.inPageNavIdPrefix + '-' + sectionIndexIncrement + '-' + inPageNavItemIndexIncrement);
+
+                    // Add link back to top
+                    var $inPageNavLinkBackToTopElement = $('<a href="#' + identificators.inPageNavIdPrefix + '-' + sectionIndexIncrement + '" class="' + classes.inPageNavToTopLinkClass + '">' + inPageNavBackToTopLinkCaption + '</a>');
+                    $inPageNavLinkBackToTopElement.insertAfter($inPageNavItem);
+                }
+            }
+        },
+
+        /**
+         * Bind necessary events:
+         * Scroll to clicked menu item.
+         * Push the change into browser history state.
+         *
+         * @private
+         */
+        _bindScrollEvents: function () {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+
+            var $navigation = $(selectors.inPageNavMenu);
+            var $links = $navigation.find(selectors.inPageNavLink);
+            var $backToTopLinks = $(selectors.inPageNavToTopLink);
+
+            // helper function for scrolling to anchor
+            function scrollToAnchor(targetSelector) {
+                var $target = $(targetSelector);
+                ns.ScrollHelper.scrollToView($target);
+            }
+
+            // handle navigation history change
+            $(window)
+                .off('popstate' + module._eventNamespace)
+                .on('popstate' + module._eventNamespace, function (e) {
+                    var state = false;
+                    if (e.originalEvent) {
+                        state = e.originalEvent.state;
+                    }
+
+                    if (!state || state.type !== 'inPageNavMenuAnchor') {
+                        return;
+                    }
+
+                    scrollToAnchor(state.targetSelector);
+                });
+
+            // handle subnavigation click
+            $links
+                .off('click' + module._eventNamespace)
+                .on('click' + module._eventNamespace, function (e) {
+                    e.preventDefault();
+                    scrollToAnchor(this.hash);
+
+                    // Update history
+                    window.history.pushState(
+                        {
+                            type: 'inPageNavMenuAnchor',
+                            targetSelector: this.hash
+                        },
+                        '',
+                        this.hash
+                    );
+                });
+
+            $backToTopLinks
+                .off('click' + module._eventNamespace)
+                .on('click' + module._eventNamespace, function (e) {
+                    e.preventDefault();
+
+                    scrollToAnchor(this.hash);
+
+                    // Update history
+                    window.history.pushState(
+                        {
+                            type: 'inPageNavMenuAnchor',
+                            targetSelector: this.hash
+                        },
+                        '',
+                        this.hash
+                    );
+                });
+        },
+
+        /**
+         * Initializes the component.
+         *
+         * @param options
+         * @private
+         */
+        _initInPageNavigation: function (options) {
+            var module = this;
+            module._options = $.extend(true, {}, module._defaults, options || {}); // deep extend
+        },
+
+        /**
+         * Initializes the component on a given DOM fragment.
+         *
+         * @param fragment {String|jQuery|DOMElement} the DOM fragment to initialize this component in
+         */
+        init: function (fragment) {
+            var module = this;
+            var $fragment = $(fragment);
+            module._initScope($fragment);
+        }
+    });
+})(window.PuiTheme, jQuery);
+
+(function (ns, $) {
+    $(function () {
+        var tariffOptions = {
+            // selectors
+            selectors: {
+                inPageNavScope: '.pui-m-tariffs',
+                inPageNavMenu: '.pui-c-submenu',
+                inPageNavToTopLink: '.pui-link-top',
+                inPageNavInclude: '[data-tarnav]'
+            },
+            // css classes
+            cssClasses: {
+                inPageNavToTopLinkClass: 'pui-link-top'
+            },
+            // identificators
+            identificators: {
+                inPageNavIdPrefix: 'tariff'
+            },
+            // data attributes
+            dataAttr: {
+                inPageNavAttrNavigationInclude: 'tarnav',
+                inPageNavAttrNavigationCaption: 'tarnav-caption',
+                inPageNavAttrToTopCaption: 'tarnav-backtotop-caption'
+            }
+        };
+        if (typeof ns.InPageNavigation !== 'undefined') {
+            ns.InPageNavigation.initWidget(); // default use
+            ns.InPageNavigation.initWidget(tariffOptions, $(document), 'tariffs'); // configuration specific for tariffs page
+        }
+    });
+})(window.PuiTheme, jQuery);

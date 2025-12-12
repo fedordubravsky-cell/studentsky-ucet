@@ -1,0 +1,257 @@
+// the semi-colon at the start is a safety net against concatenated
+// scripts and/or other plugins which may not be closed properly.
+;
+// Init Namespaces
+window.PuiTheme = window.PuiTheme || {};
+
+(function (ns, $) {
+    "use strict";
+
+    /**
+     * PUI PSP Submenu features
+     *
+     * Dependencies (init): jQuery
+     * Dependencies (runtime): PuiTheme.ScrollHelper
+     *
+     * @param options {JSON} widget configuration options
+     * @constructor
+     */
+    ns.SubNavigation = function (options) {
+        var widget = this;
+        widget._initSubNavigation(options);
+    };
+
+    /**
+     * Widget static init methods
+     */
+    $.extend(ns.SubNavigation, {
+        _instances: {},
+        _defaultInstance: '_default',
+
+        /**
+         * Initializes the widget.
+         * If an instance with the given name does not exist, creates an instance with the given configuration.
+         * Executes the widget initialization on the specified DOM fragment.
+         *
+         * @param options {JSON} widget configuration options
+         * @param fragment {String|jQuery|DOMElement} the DOM fragment selector, jQuery object or DOM element
+         * @param instanceName {String?} the widget instance identifier
+         */
+        initWidget: function (options, fragment, instanceName) {
+            var instance = ns.SubNavigation.getInstance(instanceName);
+
+            if (typeof instance === "undefined") {
+                instance = new ns.SubNavigation(options);
+                ns.SubNavigation._setInstance(instance, instanceName);
+            }
+
+            instance.init(fragment)
+        },
+
+        /**
+         * Returns the widget instance object.
+         * May return undefined if not yet initialized.
+         *
+         * @param instanceName {String?} the widget instance identifier
+         * @return {undefined|PuiTheme.SubNavigation} widget instance
+         */
+        getInstance: function (instanceName) {
+            if (typeof instanceName === "undefined") {
+                instanceName = ns.SubNavigation._defaultInstance;
+            }
+
+            return ns.SubNavigation._instances[instanceName];
+        },
+
+        /**
+         * Stores the widget instance object.
+         *
+         * @param instance {PuiTheme.SubNavigation} the widget instance
+         * @param instanceName {String?} the widget instance identifier
+         * @private
+         */
+        _setInstance: function (instance, instanceName) {
+            if (typeof instanceName === "undefined") {
+                instanceName = ns.SubNavigation._defaultInstance;
+            }
+
+            ns.SubNavigation._instances[instanceName] = instance;
+        }
+    });
+
+    $.extend(ns.SubNavigation.prototype, {
+
+        _defaults: {
+            selectors: {
+                subNav: '.html-c-subnavigation',
+                link: '.html-b-subnav-item .html-link',
+                linkText: '.html-b-subnav-item .html-text'
+            },
+            // data attributes
+            dataAttr: {
+                SubNavigation: 'subnav',
+                SubNavigationCaption: 'subnav-caption'
+            }
+        },
+
+        _options: {}, // constructed in _initSubNavigation()
+        _eventNamespace: '.PuiEventNamespace', // Event namespace for events
+
+
+        _initComponentsOnPage: function ($fragment) {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+
+            var $subNav = $(selectors.subNav, $fragment);
+            $subNav.each(function (index, componentInstance) {
+                var $componentInstance = $(componentInstance);
+
+                module._findAnchor($componentInstance);
+                module._scrollToAnchor($componentInstance);
+            });
+        },
+
+
+        /**
+         * Find anchor with data attributes and append to submenu.
+         *
+         * @private
+         */
+        _findAnchor: function () {
+
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+            var dataAttr = options.dataAttr;
+
+            // Find data attribute
+            var $dataSubnavItems = $('[data-subnav]');
+            var dataSubNavigationCount = $dataSubnavItems.length;
+            var $subNavUl = $(selectors.subNav).find('ul');
+
+            for (var i = 0; i < dataSubNavigationCount; i++) {
+
+                var $targetItem = $dataSubnavItems.eq(i);
+                var itemContent = $targetItem.text();
+                var itemCustomCaption = $targetItem.data(dataAttr.SubNavigationCaption);
+                var itemHref = $targetItem.attr('id');
+
+                var linkCaption = itemCustomCaption
+                    ? itemCustomCaption
+                    : itemContent;
+
+                var $element = $("<li class=\"html-b-subnav-item\"><a href=\"#" + itemHref + "\" class=\"html-link\"><span class=\"html-text\">" + linkCaption + "</span></a></li>");
+
+                $subNavUl.append($element);
+            }
+
+        },
+
+        /**
+         * Scroll to clicked menu item.
+         * Pushes the change into browser history state.
+         *
+         * @private
+         */
+        _scrollToAnchor: function () {
+            var module = this;
+            var options = module._options;
+            var selectors = options.selectors;
+
+            var $subNav = $(selectors.subNav);
+            var $links = $subNav.find(selectors.link);
+
+            // helper function for scrolling to anchor
+            function scrollToAnchor(targetSelector) {
+                var $target = $(targetSelector);
+                ns.ScrollHelper.scrollToView($target);
+            }
+
+            // handle navigation history change
+            $(window)
+                .off("popstate" + module._eventNamespace)
+                .on("popstate" + module._eventNamespace, function (e) {
+                    var state = false;
+                    if (e.originalEvent) {
+                        state = e.originalEvent.state;
+                    }
+
+                    if (!state || state.type !== "submenuAnchor") {
+                        return;
+                    }
+
+                    scrollToAnchor(state.targetSelector);
+                });
+
+            // handle subnavigation click
+            $links
+                .off("click" + module._eventNamespace)
+                .on("click" + module._eventNamespace, function (e) {
+                    e.preventDefault();
+
+                    scrollToAnchor(this.hash);
+                    module._trackAnchorClick(e.target);
+
+                    // Update history
+                    window.history.pushState({
+                            type: "submenuAnchor",
+                            targetSelector: this.hash
+                        },
+                        "TODO: Title",
+                        this.hash
+                    );
+                });
+        },
+
+        /**
+         * Send Digital tracking information
+         *
+         * @param {Object} anchor HTML element
+         * @private
+         */
+        _trackAnchorClick: function (anchor) {
+            var trackingData = {
+                action: "anchorClick",
+                anchorText: $(anchor).text()
+            };
+
+            // notify tracking API
+            if (typeof window.measure === "function") {
+                window.measure(trackingData);
+            }
+        },
+
+        /**
+         * Initializes the subnavigation component.
+         *
+         * @param options
+         * @private
+         */
+        _initSubNavigation: function (options) {
+            var module = this;
+
+            module._options = $.extend({}, module._defaults, options || {});
+
+            module._initComponentsOnPage(); // init function
+        },
+
+        init: function (fragment) {
+            var module = this;
+            var $fragment = $(fragment);
+
+            module._initComponentsOnPage($fragment);
+        }
+
+
+    });
+
+})(window.PuiTheme, jQuery);
+
+(function (ns, $) {
+    $(function () {
+        if (typeof ns.SubNavigation !== "undefined") {
+            ns.SubNavigation.initWidget();
+        }
+    });
+})(window.PuiTheme, jQuery);

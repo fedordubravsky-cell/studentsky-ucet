@@ -1,0 +1,93 @@
+// based on https://github.com/M6Web/picturefill-background
+(function( w ) {
+    "use strict";
+
+    /**
+     * Utilities
+     */
+    var escapeRegExp = function( string ) {
+        return string.replace( /[.*+?^${}()|[\]\\]/g, '\\$&' );
+    };
+
+    /**
+     * Default options
+     * Styles selector is used for old components from theme that used only one class "pui-picturefill-background" for
+     * both styling and javascript.
+     * After applying components from React framework a distinguishing selector for javascript was added.
+     * PUI scripts now target only elements with .pui-js-picturefill-background-init-html (or Styles selector only).
+     * React framework has its own javascript solution targeting for .pui-js-picturefill-background-init-rct.
+     * Selector "pui-picturefill-background" still remains on all elements but is used for styles only.
+     */
+    w.picturefillBackgroundOptions = {
+        selectorStyles: "pui-picturefill-background",
+        selector: "pui-js-picturefill-background-init-",
+        selectorFramework: "html"
+    };
+
+    /**
+     * Apply a responsive background image
+     */
+    w.picturefillBackground = function() {
+        // selector for modules constructed by older, pre-React prototype design. Distinguishing feature is that -init- css class is missing
+        var selectorLegacy = '.' + w.picturefillBackgroundOptions.selectorStyles  + ":not([class*=\'" +  w.picturefillBackgroundOptions.selector + "'])";
+        // selector for modules in HTML framework
+        var SelectorHTMLFramework = '.' + w.picturefillBackgroundOptions.selector + w.picturefillBackgroundOptions.selectorFramework;
+        var picturefills = w.document.querySelectorAll(SelectorHTMLFramework + ', ' + selectorLegacy);
+
+        for ( var i = 0, il = picturefills.length; i < il; i++ ) {
+            // picturefill does not support nested ones, detect it and skip
+            var nestedItems = picturefills[i].getElementsByClassName( w.picturefillBackgroundOptions.selector );
+            if(nestedItems.length > 0) {
+                // there is nested picturefill, skip this (it is parent)
+                continue;
+            }
+            // detect sources with data attributes
+            var sources = picturefills[ i ].getElementsByTagName( "span" );
+            var matches = [];
+
+            for( var j = 0, jl = sources.length; j < jl; j++ ) {
+                var src   = sources[ j ].getAttribute( "data-src" );
+                var media = sources[ j ].getAttribute( "data-media" );
+                var bgColor = sources[ j ].getAttribute( "data-bg-color" );
+
+                if ( src && (!media || ( w.matchMedia && w.matchMedia( media ).matches )) ) {
+                    var item = {
+                        source: src,
+                        bg: bgColor
+                    };
+                    matches.push( item );
+                }
+            }
+
+            if ( matches.length ) {
+                var match = matches.pop();
+                src =  match.source;
+                var bg = match.bg;
+                var exp = new RegExp( escapeRegExp( src ) );
+
+                // Update target element's background image, if necessary
+                if ( !exp.test( picturefills[ i ].style.backgroundImage ) ) {
+                    picturefills[i].style.backgroundImage = "url('" + src + "')";
+                    picturefills[i].style.backgroundColor = bg;
+                    // do not use other inline styles - removed from original code
+                }
+            }
+        }
+    };
+
+    /**
+     * Run on resize and domready (w.load as a fallback)
+     */
+    if ( w.addEventListener ) {
+        w.addEventListener( "load", w.picturefillBackground, false );
+        w.addEventListener( "resize", w.picturefillBackground, false );
+        w.addEventListener( "DOMContentLoaded", function() {
+            w.picturefillBackground();
+            w.removeEventListener( "load", w.picturefillBackground, false );
+        }, false );
+    }
+    else if ( w.attachEvent ) {
+        w.attachEvent( "onload", w.picturefillBackground );
+    }
+
+}( this ));

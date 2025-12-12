@@ -1,0 +1,9 @@
+import * as a43cd4150ef132cd4573bf34f067a98dbe972bfcb004b669f6a955affe31f221a from "../o/frontend-js-components-web/__liferay__/index.js";
+
+Liferay.Loader.define(
+	"frontend-js-components-web@2.0.80/index",
+	['module'],
+	function (module) {
+		module.exports = a43cd4150ef132cd4573bf34f067a98dbe972bfcb004b669f6a955affe31f221a;
+	}
+);

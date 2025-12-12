@@ -1,0 +1,59 @@
+
+/**
+ * the semi-colon at the start is a safety net against concatenated
+ * scripts and/or other plugins which may not be closed properly.
+ */
+;
+
+/**
+ * JS namespace init
+ * @type {{}|*}
+ */
+window.PuiTheme = window.PuiTheme || {};
+
+(function (ns, $) {
+    "use strict";
+
+    ns.Footer = function () {
+        this._init();
+    };
+
+    $.extend(ns.Footer.prototype, {
+        _defaults: {
+            selectors: {
+                footer          : 'footer',
+                footerBox       : '.html-b-footer-box',
+                footerBoxHeader : 'h3'
+            },
+            changeClasses: {
+                footerBoxVisible : 'html-bx-visible'
+            }
+        },
+        _init: function () {
+            var module = this;
+
+            module._bindEvents();
+        },
+
+        _bindEvents: function () {
+            var module = this;
+
+            $(module._defaults.selectors.footerBoxHeader,module._defaults.selectors.footer).on('click.foot.header' ,function (e) {
+                e.preventDefault();
+
+                var element = $(this).closest(module._defaults.selectors.footerBox);
+                element.toggleClass(module._defaults.changeClasses.footerBoxVisible);
+            });
+        }
+
+    });
+
+    $(function () {
+        if (typeof ns.Footer !== "undefined") {
+            new ns.Footer();
+        }
+    });
+
+})(window.PuiTheme, jQuery);
+
+

@@ -1,0 +1,105 @@
+
+// the semi-colon at the start is a safety net against concatenated
+// scripts and/or other plugins which may not be closed properly.
+;
+// Init Namespaces
+window.PuiTheme = window.PuiTheme || {};
+
+(function (ns, $) {
+    $(function () {
+
+        /**
+         * This script configures the jQuery UI Tooltip plugin to work
+         * with information tooltips as well as error messages.
+         */
+        window.tooltipDefaults = {
+
+            items: "[title]:not([disabled]),[data-error]:not([disabled]),[data-tooltip-info]:not([disabled])",
+            tooltipClass: 'pdp-tooltip',
+
+            open: function (event, ui) {
+                var tooltip = ui.tooltip;
+                var element = $(this);
+                var isError = typeof element.attr("data-error") !== "undefined" || element.hasClass("add-on-invalid");
+                if (isError) {
+                    tooltip.addClass("pdp-error");
+                } else {
+                    tooltip.removeClass("pdp-error");
+                }
+            },
+            position: {
+                my: "right bottom-30",
+                at: "right",
+
+                using: function (position, feedback) {
+                    var feedbackVertical = "pdp-tooltip-"+feedback.vertical;
+                    var feedbackHorizontal = "pdp-tooltip-"+feedback.horizontal;
+                    $(this)
+                        .css(position)
+                        .addClass(feedbackVertical)
+                        .addClass(feedbackHorizontal);
+                    $("<div>")
+                        .addClass("npw-arrow")
+                        .appendTo(this);
+                }
+            },
+
+            content: function () {
+                var element = $(this);
+                var message;
+
+                var isError = typeof element.attr("data-error") !== "undefined";
+
+                var isInfo = element.attr("data-tooltip-info");
+
+                if (isError) {
+                    message = $(this).attr("data-error") || "";
+                    return $("<a>").text(message).html();
+                }
+                else if (isInfo) {
+                    message = $(this).attr("data-tooltip-info") || "";
+                    return $("<a>").text(message).html();
+                }
+                else {
+                    message = $(this).attr("title") || "";
+                    return $("<a>").text(message).html();
+                }
+            }
+
+        };
+
+        var $tooltipIcon = $('.add-on');
+        $tooltipIcon.tooltip($.extend({}, window.tooltipDefaults, window.tooltipConfig));
+        $tooltipIcon
+            .off("click.pdpInfoTooltip")
+            .on("click.pdpInfoTooltip", function( event ){
+                event.preventDefault();
+                return false;
+            });
+
+        // Safari mobile fixes
+        var $tooltipIconIos = $('.ios .add-on');
+
+        if($tooltipIconIos.length > 0) {
+            // fixing Safari Mobile bug - tooltips are not closing
+            $tooltipIconIos.off("mouseover mouseout");
+
+            // fixing Safari Mobile tooltips
+            $tooltipIconIos.on("click.pdpInfoTooltip", function (event) {
+                $(this).tooltip('open');
+                event.preventDefault();
+                return false;
+            });
+
+            // using touchstart event - click event is not bubbling correctly
+            $('.ios')
+                .off("touchstart.pdpInfoTooltip")
+                .on("touchstart.pdpInfoTooltip", function () {
+                    $tooltipIconIos.tooltip('close');
+                }
+            );
+        }
+
+    });
+})(window.PuiTheme, jQuery);
+

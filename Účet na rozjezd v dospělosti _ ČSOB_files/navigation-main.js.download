@@ -1,0 +1,782 @@
+// the semi-colon at the start is a safety net against concatenated
+// scripts and/or other plugins which may not be closed properly.
+;
+// Init Namespaces
+window.PuiTheme = window.PuiTheme || {};
+
+(function (ns, $) {
+    "use strict";
+
+    /**
+     * Module - Navigation Main.
+     *
+     * Dependencies: jQuery, PuiObservable
+     *
+     * @param {Object} [options] widget configuration options
+     * @constructor
+     */
+    ns.NavigationMain = function (options) {
+        const module = this;
+
+        module.options = $.extend({}, module._defaults, options || {});
+        module._init();
+    };
+
+    $.extend(ns.NavigationMain.prototype, {
+        _defaults: {
+            selectors: {
+                scope: '.pui-m-navigation-main',
+                popupToggle: '.html-prj1171-button',
+                popupContent: '.html-prj1171-popup',
+                demandsDesktop: '.pui-demands:not(.pui-cloned)',
+                demandsMobile: '.pui-demands.pui-cloned',
+                demandsSubmenu: '.pui-demands-submenu',
+                involveSection: '.pui-involve',
+                searchSection: '.pui-search',
+                searchToggle: '.pui-search-toggle strong',
+                searchForm: '.pui-search-bar',
+                searchInput: '.search-bar-keywords-input',
+                searchClose: '.pui-search-bar-close',
+                mobileToggle: '.pui-mobile-navigation-toggle [data-navigation-main-target-dropdown-id]',
+                mobilePopupWrapper: '.pui-navigation-main-mobile-wrapper',
+                mobilePopup: '.pui-navigation-main-mobile-wrapper .html-prj1171-popup',
+                mobileShortcut: '.pui-shortcut',
+                shortcutToInvolve: '.pui-target-involve',
+            },
+            attributeIds: {
+                attrDropdownId: 'data-prj1171-dropdown-id',
+                attrDtrElementName: 'data-pui-dtr-element-name',
+            },
+            cssClasses: {
+                hasPopupActive: 'pui-has-popup-active',
+                isActive: 'pui-active',
+                isPopupExpanded: 'html-is-expanded',
+            },
+            dataAttributes: {
+                dropdownId: 'navigationMainDropdownId',
+                targetDropdownId: 'navigationMainTargetDropdownId',
+            },
+            eventsToObserve: {
+                openDropdown: 'navigationMain.openDropdown',
+                closeDropdown: 'navigationMain.closeDropdown',
+                closeOtherDropdowns: 'navigationMain.closeOtherDropdowns',
+                openMobileSubmenu: 'navigationMain.openMobileSubmenu',
+                closeMobileSubmenu: 'navigationMain.closeMobileSubmenu',
+                closeOtherMobileSubmenus: 'navigationMain.closeOtherMobileSubmenus',
+            },
+            shortcutTargetIds: [
+                'involve',
+                'smartbanking'
+            ],
+            analyticsOptions: {
+                actions: {
+                    dropdownToggleClick: 'dropdownMenuClick',
+                    dropdownAnchorClick: 'dropdownMenuItemClick',
+                },
+                locations: {
+                    navigation: 'pageHeader',
+                    mobileNavigation: 'hamburgerMenu',
+                    popupInvolve: 'newClientMenu',
+                },
+            },
+            pluginOptions: {},
+        },
+        options: {}, // constructed in _init()
+        $elements: {},
+        eventNamespace: '.NavigationMain',
+
+        /**
+         * Inits module
+         *
+         * @private
+         */
+        _initModule: function () {
+            const module = this;
+            const options = module.options;
+            const cssClassHasPopupActive = options.cssClasses.hasPopupActive;
+            const eventCloseOtherDropdowns = options.eventsToObserve.closeOtherDropdowns;
+            const eventOpenDropdown = options.eventsToObserve.openDropdown;
+            const eventCloseDropdown = options.eventsToObserve.closeDropdown;
+            const $navigationMain = module.$elements.navigationMain;
+
+            /**
+             * Sets the state of the main navigation - indicates whether it has an active popup or not.
+             *
+             * @param {jQuery} $navigationMain - the main navigation element
+             * @param {boolean} willExpand - true if the popup will be expanded, false otherwise
+             * @private
+             */
+            function _setNavigationMainPopupState($navigationMain, willExpand) {
+                $navigationMain.toggleClass(cssClassHasPopupActive, willExpand);
+            }
+
+            window.puiObservable.subscribe(eventOpenDropdown, function (data) {
+                if (typeof data.relatedDropdownId !== 'undefined') {
+                    _setNavigationMainPopupState($navigationMain, true);
+                }
+            });
+
+            window.puiObservable.subscribe(eventCloseDropdown, function (data) {
+                _setNavigationMainPopupState($navigationMain, false);
+            });
+
+            window.puiObservable.subscribe(eventCloseOtherDropdowns, function (data) {
+                if (typeof data.relatedDropdownId === 'undefined') {
+                    _setNavigationMainPopupState($navigationMain, false);
+                }
+            });
+
+            $(window)
+                .off('resize' + module.eventNamespace)
+                .on('resize' + module.eventNamespace, () => {
+                    window.puiObservable.dispatch(eventCloseOtherDropdowns, {});
+                });
+        },
+
+        /**
+         * Sets initial attributes for a demand item toggle and its submenu.
+         *
+         * @param {jQuery} $demandToggle - the toggle element of the demand
+         * @param {jQuery} $demandSubmenu - the submenu element of the demand
+         * @param {string} demandId - the ID which keeps relation between the toggle and submenu
+         * @private
+         */
+        _setDemandItemInitialAttributes: function ($demandToggle, $demandSubmenu, demandId) {
+            $demandToggle.attr({
+                'role': 'button',
+                'aria-expanded': 'false',
+            });
+
+            $demandSubmenu.attr({
+                'id': demandId,
+                'role': 'group',
+                'aria-label': $demandToggle.text(),
+            });
+        },
+
+        /**
+         * Sets the state of a demand toggle and its submenu.
+         *
+         * @param {jQuery} $demandToggle - the toggle element of the demand
+         * @param {jQuery} $demandSubmenu - the submenu element of the demand
+         * @param {boolean} willExpand - true if the submenu will be expanded, false otherwise
+         * @private
+         */
+        _setDemandItemState: function ($demandToggle, $demandSubmenu, willExpand) {
+            const module = this;
+            const options = module.options;
+            const cssClassIsActive = options.cssClasses.isActive;
+
+            $demandToggle
+                .toggleClass(cssClassIsActive, willExpand)
+                .attr('aria-expanded', willExpand ? 'true' : 'false');
+            $demandSubmenu
+                .toggleClass(cssClassIsActive, willExpand);
+        },
+
+        /**
+         * Inits submenus in desktop version of navigation
+         *
+         * @private
+         */
+        _initDemandsSubmenusForDesktop: function () {
+            const module = this;
+            const options = module.options;
+            const selectors = options.selectors;
+            const cssClassIsActive = options.cssClasses.isActive;
+            const eventCloseOtherDropdowns = options.eventsToObserve.closeOtherDropdowns;
+            const eventOpenDropdown = options.eventsToObserve.openDropdown;
+            const eventCloseDropdown = options.eventsToObserve.closeDropdown;
+            const $navigationMain = module.$elements.navigationMain;
+            const $demandsSection = $(selectors.demandsDesktop, $navigationMain);
+            const $demandsWithSubmenus = $(selectors.demandsSubmenu, $demandsSection).parent();
+
+            $demandsWithSubmenus.each(function (index) {
+                const $demand = $(this);
+                const $demandSubmenu = $(selectors.demandsSubmenu, $demand);
+                const $demandToggle = $('> a:first-child', $demand);
+                const demandId = `demands-submenu-${index}`;
+                let isPointerOver = false;
+
+                module._setDemandItemInitialAttributes($demandToggle, $demandSubmenu, demandId);
+
+                $demandToggle
+                    .off('click' + module.eventNamespace)
+                    .on('click' + module.eventNamespace, (event) => {
+                        event.preventDefault();
+                        const willExpand = !$demandToggle.hasClass(cssClassIsActive);
+
+                        if (willExpand) {
+                            window.puiObservable.dispatch(eventCloseOtherDropdowns, {relatedDropdownId: demandId});
+                            window.puiObservable.dispatch(eventOpenDropdown, {relatedDropdownId: demandId});
+                        } else {
+                            window.puiObservable.dispatch(eventCloseDropdown, {relatedDropdownId: demandId});
+                        }
+                    })
+                    .off('keydown' + module.eventNamespace)
+                    .on('keydown' + module.eventNamespace, (event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            $demandToggle.trigger('click');
+                        } else if (event.key === 'Escape') {
+                            if ($demandSubmenu.hasClass(cssClassIsActive)) {
+                                window.puiObservable.dispatch(eventCloseDropdown, {relatedDropdownId: demandId});
+                            }
+                        }
+                    });
+
+                $demand
+                    .off('focusout' + module.eventNamespace)
+                    .on('focusout' + module.eventNamespace, (event) => {
+                        if ($demandSubmenu.hasClass(cssClassIsActive)) {
+                            if (isPointerOver  && !event.relatedTarget) {
+                                // Handle case when focus is lost due to pointer click inside submenu
+                                $(event.target).trigger('focus');
+                            } else if (!($demand.has(event.relatedTarget).length)) {
+                                window.puiObservable.dispatch(eventCloseDropdown, {relatedDropdownId: demandId});
+                            }
+                        }
+                    });
+
+                $demandSubmenu
+                    .off('keydown' + module.eventNamespace)
+                    .on('keydown' + module.eventNamespace, (event) => {
+                        if (event.key === 'Escape') {
+                            window.puiObservable.dispatch(eventCloseDropdown, {relatedDropdownId: demandId});
+                            $demandToggle.trigger('focus');
+                        }
+                    })
+                    .off('mouseenter' + module.eventNamespace)
+                    .on('mouseenter' + module.eventNamespace, () => {
+                        isPointerOver = true;
+                    })
+                    .off('mouseleave' + module.eventNamespace)
+                    .on('mouseleave' + module.eventNamespace, () => {
+                        isPointerOver = false;
+                    });
+
+                window.puiObservable.subscribe(eventCloseOtherDropdowns, function (data) {
+                    if (data.relatedDropdownId !== demandId) {
+                        module._setDemandItemState($demandToggle, $demandSubmenu, false);
+                    }
+                });
+
+                window.puiObservable.subscribe(eventCloseDropdown, function (data) {
+                    if (data.relatedDropdownId === demandId) {
+                        module._setDemandItemState($demandToggle, $demandSubmenu, false);
+                    }
+                });
+
+                window.puiObservable.subscribe(eventOpenDropdown, function (data) {
+                    if (data.relatedDropdownId === demandId) {
+                        module._setDemandItemState($demandToggle, $demandSubmenu, true);
+                    }
+                });
+            });
+        },
+
+        /**
+         * Inits submenus in mobile version of navigation
+         *
+         * @private
+         */
+        _initDemandsSubmenusForMobile: function () {
+            const module = this;
+            const options = module.options;
+            const selectors = options.selectors;
+            const cssClassIsActive = options.cssClasses.isActive;
+            const eventCloseOtherMobileSubmenus = options.eventsToObserve.closeOtherMobileSubmenus;
+            const eventOpenMobileSubmenu = options.eventsToObserve.openMobileSubmenu;
+            const eventCloseMobileSubmenu = options.eventsToObserve.closeMobileSubmenu;
+            const eventCloseOtherDropdowns = options.eventsToObserve.closeOtherDropdowns;
+            const eventCloseDropdown = options.eventsToObserve.closeDropdown;
+            const $navigationMain = module.$elements.navigationMain;
+            const $mobilePopup = $(selectors.mobilePopup, $navigationMain);
+            const $demandsSection = $(selectors.demandsMobile, $navigationMain);
+            const $demandsWithSubmenus = $(selectors.demandsSubmenu, $demandsSection).parent();
+
+            $demandsWithSubmenus.each(function (index) {
+                const $demand = $(this);
+                const $demandSubmenu = $(selectors.demandsSubmenu, $demand);
+                const $demandToggle = $('> a:first-child', $demand);
+                const demandId = `demands-mobile-submenu-${index}`;
+
+                module._setDemandItemInitialAttributes($demandToggle, $demandSubmenu, demandId);
+
+                $demandToggle
+                    .off('click' + module.eventNamespace)
+                    .on('click' + module.eventNamespace, (event) => {
+                        event.preventDefault();
+                        const willExpand = !$demandToggle.hasClass(cssClassIsActive);
+
+                        if (willExpand) {
+                            window.puiObservable.dispatch(eventCloseOtherMobileSubmenus, {relatedDropdownId: demandId});
+                            window.puiObservable.dispatch(eventOpenMobileSubmenu, {relatedDropdownId: demandId});
+                        } else {
+                            window.puiObservable.dispatch(eventCloseMobileSubmenu, {relatedDropdownId: demandId});
+                        }
+                    })
+                    .off('keydown' + module.eventNamespace)
+                    .on('keydown' + module.eventNamespace, (event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            $demandToggle.trigger('click');
+                        }
+                    });
+
+                window.puiObservable.subscribe(eventCloseOtherMobileSubmenus, function (data) {
+                    if (data.relatedDropdownId !== demandId) {
+                        module._setDemandItemState($demandToggle, $demandSubmenu, false);
+                    }
+                });
+
+                window.puiObservable.subscribe(eventCloseMobileSubmenu, function (data) {
+                    if (data.relatedDropdownId === demandId) {
+                        module._setDemandItemState($demandToggle, $demandSubmenu, false);
+                    }
+                });
+
+                window.puiObservable.subscribe(eventOpenMobileSubmenu, function (data) {
+                    if (data.relatedDropdownId === demandId) {
+                        module._setDemandItemState($demandToggle, $demandSubmenu, true);
+
+                        const toggleTop = $demandToggle.offset().top;
+                        const popupTop = $mobilePopup.offset().top;
+                        if (toggleTop < popupTop) {
+                            $mobilePopup.scrollTop(0);
+                        }
+                    }
+                });
+            });
+
+
+            // Reset submenus when any dropdown is going to be closed
+            // We do not need to check which dropdown is targeted
+            window.puiObservable.subscribe(eventCloseOtherDropdowns, function (data) {
+                window.puiObservable.dispatch(eventCloseOtherMobileSubmenus, {});
+            });
+
+            window.puiObservable.subscribe(eventCloseDropdown, function (data) {
+                window.puiObservable.dispatch(eventCloseOtherMobileSubmenus, {});
+            });
+        },
+
+        /**
+         * Inits search toggle
+         *
+         * @private
+         */
+        _initSearchToggle: function () {
+            const module = this;
+            const options = module.options;
+            const selectors = options.selectors;
+            const dataAttributes = options.dataAttributes;
+            const cssClassIsActive = options.cssClasses.isActive;
+            const eventCloseOtherDropdowns = options.eventsToObserve.closeOtherDropdowns;
+            const eventOpenDropdown = options.eventsToObserve.openDropdown;
+            const eventCloseDropdown = options.eventsToObserve.closeDropdown;
+            const $navigationMain = module.$elements.navigationMain;
+            const $searchToggle = $(selectors.searchToggle, $navigationMain);
+            const $searchInput = $(selectors.searchInput, $navigationMain);
+            const targetDropdownId = $searchToggle.data(dataAttributes.targetDropdownId);
+
+            /**
+             * Sets the state of the search toggle.
+             * Indicates whether the search toggle is active (expanded) or not.
+             *
+             * @param {jQuery} $searchToggle - the search toggle element
+             * @param {boolean} willExpand - true if the search toggle will be expanded, false otherwise
+             * @private
+             */
+            function _setSearchToggleState($searchToggle, willExpand) {
+                $searchToggle.toggleClass(cssClassIsActive, willExpand);
+            }
+
+            window.puiObservable.subscribe(eventOpenDropdown, function (data) {
+                // Act properly even when related dropdown is being activated by other trigger
+                if (data.relatedDropdownId === targetDropdownId) {
+                    _setSearchToggleState($searchToggle, true);
+                }
+            });
+
+            window.puiObservable.subscribe(eventCloseDropdown, function (data) {
+                if (data.relatedDropdownId === targetDropdownId) {
+                    _setSearchToggleState($searchToggle, false);
+                }
+            });
+
+            window.puiObservable.subscribe(eventCloseOtherDropdowns, function (data) {
+                if (data.relatedDropdownId !== targetDropdownId) {
+                    _setSearchToggleState($searchToggle, false);
+                }
+            });
+
+            $searchToggle
+                .off('click' + module.eventNamespace)
+                .on('click' + module.eventNamespace, () => {
+                    const willExpand = !$searchToggle.hasClass(cssClassIsActive);
+
+                    $searchToggle.toggleClass(cssClassIsActive, willExpand);
+
+                    if (willExpand) {
+                        window.puiObservable.dispatch(eventCloseOtherDropdowns, {relatedDropdownId: targetDropdownId});
+                        window.puiObservable.dispatch(eventOpenDropdown, {relatedDropdownId: targetDropdownId});
+                        $searchInput.trigger('focus');
+                    } else {
+                        window.puiObservable.dispatch(eventCloseOtherDropdowns, {});
+                    }
+                })
+                .off('keydown' + module.eventNamespace)
+                .on('keydown' + module.eventNamespace, (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        $searchToggle.trigger('click');
+                    } else if ((event.key === 'Tab' && event.shiftKey) || (event.key === 'Escape')) {
+                        if ($searchToggle.hasClass(cssClassIsActive)) {
+                            window.puiObservable.dispatch(eventCloseDropdown, {relatedDropdownId: targetDropdownId});
+                        }
+                    }
+                });
+        },
+
+        /**
+         * Inits search close button
+         *
+         * @private
+         */
+        _initSearchClose: function () {
+            const module = this;
+            const options = module.options;
+            const selectors = options.selectors;
+            const eventCloseOtherDropdowns = options.eventsToObserve.closeOtherDropdowns;
+            const $navigationMain = module.$elements.navigationMain;
+            const $searchToggle = $(selectors.searchToggle, $navigationMain);
+            const $searchClose = $(selectors.searchClose, $navigationMain);
+
+            $searchClose
+                .off('click' + module.eventNamespace)
+                .on('click' + module.eventNamespace, () => {
+                    window.puiObservable.dispatch(eventCloseOtherDropdowns, {});
+                    $searchToggle.trigger('focus');
+                })
+                .off('keydown' + module.eventNamespace)
+                .on('keydown' + module.eventNamespace, (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        $searchClose.trigger('click');
+                    }
+                });
+        },
+
+        /**
+         * Inits search form
+         *
+         * @private
+         */
+        _initSearchForm: function () {
+            const module = this;
+            const options = module.options;
+            const selectors = options.selectors;
+            const dataAttributes = options.dataAttributes;
+            const cssClassIsActive = options.cssClasses.isActive;
+            const eventCloseOtherDropdowns = options.eventsToObserve.closeOtherDropdowns;
+            const eventOpenDropdown = options.eventsToObserve.openDropdown;
+            const eventCloseDropdown = options.eventsToObserve.closeDropdown;
+            const $navigationMain = module.$elements.navigationMain;
+            const $searchToggle = $(selectors.searchToggle, $navigationMain);
+            const $searchForm = $(selectors.searchForm, $navigationMain);
+            const dropdownId = $searchForm.data(dataAttributes.dropdownId);
+
+            /**
+             * Sets the state of the search form.
+             * Indicates whether the search form is active (expanded) or not.
+             *
+             * @param {jQuery} $searchForm - the search form element
+             * @param {boolean} willExpand - true if the search form will be expanded, false otherwise
+             * @private
+             */
+            function _setSearchFormState($searchForm, willExpand) {
+                $searchForm.toggleClass(cssClassIsActive, willExpand);
+            }
+
+            window.puiObservable.subscribe(eventOpenDropdown, function (data) {
+                if (data.relatedDropdownId === dropdownId) {
+                    _setSearchFormState($searchForm, true);
+                }
+            });
+
+            window.puiObservable.subscribe(eventCloseDropdown, function (data) {
+                if (data.relatedDropdownId === dropdownId) {
+                    _setSearchFormState($searchForm, false);
+                }
+            });
+
+            window.puiObservable.subscribe(eventCloseOtherDropdowns, function (data) {
+                if (data.relatedDropdownId !== dropdownId) {
+                    _setSearchFormState($searchForm, false);
+                }
+            });
+
+            $searchForm
+                .off('keydown' + module.eventNamespace)
+                .on('keydown' + module.eventNamespace, (event) => {
+                    if (event.key === 'Escape') {
+                        window.puiObservable.dispatch(eventCloseDropdown, {relatedDropdownId: dropdownId});
+                        $(selectors.searchToggle, $navigationMain).trigger('focus');
+                    }
+                })
+                .off('focusout' + module.eventNamespace)
+                .on('focusout' + module.eventNamespace, (event) => {
+                    if ($searchForm.hasClass(cssClassIsActive)) {
+                        if (!($searchForm.has(event.relatedTarget).length || $searchToggle.parent().has(event.relatedTarget).length)) {
+                            window.puiObservable.dispatch(eventCloseDropdown, {relatedDropdownId: dropdownId});
+                        }
+                    }
+                });
+        },
+
+        /**
+         * Creates and inits shortcuts inside mobile navigation
+         *
+         * @private
+         */
+        _initShortcuts: function () {
+            const module = this;
+            const options = module.options;
+            const selectors = options.selectors;
+            const attributeIds = options.attributeIds;
+            const $navigationMain = module.$elements.navigationMain;
+
+            const $shortcutsSection = $('<div role="listitem" class="pui-navigation-section pui-shortcuts" aria-hidden="true"></div>');
+            const $shortcutsList = $('<ul></ul>');
+            const externalToggleEventName = ns.navigationMainDropdown.getExternalToggleEventName();
+
+            options.shortcutTargetIds.forEach((shortcutTargetId) => {
+                const shortcutTargetSelector = `[${attributeIds.attrDropdownId}=${shortcutTargetId}] ${selectors.popupToggle}`;
+                const $shortcutTarget = $navigationMain.find(shortcutTargetSelector);
+                const $shortcut = $(`<a href="#" class="pui-shortcut pui-target-${shortcutTargetId}"></a>`);
+                $shortcut.text($shortcutTarget.text());
+
+                // Copy DTR attribute from target to shortcut
+                if ($shortcutTarget.attr(attributeIds.attrDtrElementName)) {
+                    $shortcut.attr(attributeIds.attrDtrElementName, $shortcutTarget.attr(attributeIds.attrDtrElementName));
+                }
+
+                $shortcut
+                    .off('click' + module.eventNamespace)
+                    .on('click' + module.eventNamespace, (event) => {
+                        event.preventDefault();
+                        $shortcutTarget.trigger('focus').trigger(externalToggleEventName);
+                    });
+
+                const $shortcutListItem = $('<li></li>').append($shortcut);
+                $shortcutsList.append($shortcutListItem);
+            });
+
+            $shortcutsSection.append($shortcutsList);
+            $navigationMain.find(selectors.searchSection).after($shortcutsSection);
+        },
+
+        /**
+         * Adds additional event listener to work correctly with external toggle
+         *
+         * @private
+         */
+        _initMobileNavigation: function () {
+            const module = this;
+            const options = module.options;
+            const selectors = options.selectors;
+            const dataAttributes = options.dataAttributes;
+            const $navigationMain = module.$elements.navigationMain;
+            const $mobileToggle = $(selectors.mobileToggle, $navigationMain);
+            const $mobilePopupWrapper = $(selectors.mobilePopupWrapper, $navigationMain);
+            const targetDropdownId = $mobileToggle.data(dataAttributes.targetDropdownId);
+
+            $mobilePopupWrapper
+                .off('keydown' + module.eventNamespace)
+                .on('keydown' + module.eventNamespace, (event) => {
+                    if (event.key === 'Escape') {
+                        window.puiObservable.dispatch(options.eventsToObserve.closeDropdown, {relatedDropdownId: targetDropdownId});
+                        $mobileToggle.trigger('focus');
+                    }
+                });
+        },
+
+        /**
+         * Inits external toggle of mobile navigation dropdown
+         *
+         * @private
+         */
+        _initMobileNavigationToggle: function () {
+            const module = this;
+            const options = module.options;
+            const selectors = options.selectors;
+            const cssClasses = options.cssClasses;
+            const dataAttributes = options.dataAttributes;
+            const $navigationMain = module.$elements.navigationMain;
+            const $mobileToggle = $(selectors.mobileToggle, $navigationMain);
+            const $mobilePopupWrapper = $(selectors.mobilePopupWrapper, $navigationMain);
+            const targetDropdownId = $mobileToggle.data(dataAttributes.targetDropdownId);
+
+            ns.navigationMainDropdown.initToggleButton($mobileToggle, targetDropdownId);
+
+            $mobileToggle
+                .off('keydown' + module.eventNamespace)
+                .on('keydown' + module.eventNamespace, (event) => {
+                    if ($mobilePopupWrapper.hasClass(cssClasses.isPopupExpanded)) {
+                        if (event.key === 'Escape') {
+                            window.puiObservable.dispatch(options.eventsToObserve.closeDropdown, {relatedDropdownId: targetDropdownId});
+                        }
+                    }
+                })
+                .off('focusout' + module.eventNamespace)
+                .on('focusout' + module.eventNamespace, (event) => {
+                    if ($mobilePopupWrapper.hasClass(cssClasses.isPopupExpanded) && !($mobilePopupWrapper.has(event.relatedTarget).length)) {
+                        window.puiObservable.dispatch(options.eventsToObserve.closeDropdown, {relatedDropdownId: targetDropdownId});
+                    }
+                });
+        },
+
+        /**
+         * Marks links to the current page with aria-current attribute
+         *
+         * @private
+         */
+        _markLinksToCurrentPage: function () {
+            const module = this;
+            const options = module.options;
+            const selectors = options.selectors;
+            const $navigationMain = module.$elements.navigationMain;
+            const currentUrl = _normalizeUrl(window.location.href.replace(window.location.protocol + "//" + window.location.hostname, ''));
+            const $navigationLinks = $navigationMain.find('a[href]');
+
+            /**
+             * Normalizes the link URL.
+             * Removes possible non-path segments from the given URL.
+             * Handles trailing slashes, query strings, fragments and Liferay portlet virtual friendly URLs
+             *
+             * @param url
+             * @returns {string} normalized URL
+             * @private
+             */
+            function _normalizeUrl(url) {
+                var result = url;
+                // replace backslashes for forward slashes
+                result = result.replace("\\", "/");
+                // trim Liferay virtual path, query string and fragments
+                result = result.replace(/((\/-\/|\/?\?).*)?\/?$/i, "");
+                return result;
+            }
+
+            $navigationLinks.each(function () {
+                const $link = $(this);
+                const linkUrl = _normalizeUrl($link.attr('href'));
+
+                if (linkUrl === currentUrl) {
+                    $link.attr('aria-current', 'page');
+                }
+            });
+        },
+
+        /**
+         * Initializes events used for analytics
+         *
+         * @private
+         */
+        _initAnalytics: function () {
+            const module = this;
+            const options = module.options;
+            const selectors = options.selectors;
+            const $navigationMain = module.$elements.navigationMain;
+            const analyticsOptions = options.analyticsOptions;
+            const eventToMeasure = `click${module.eventNamespace}-dtr`;
+
+            /**
+             * Calls measure with the given parameters
+             *
+             * @param {String} action
+             * @param {String} elementName
+             * @param {String} elementLocation
+             */
+            function dtrMeasure(action, elementName, elementLocation) {
+                try {
+                    measure({
+                        action: action,
+                        elementName: elementName,
+                        elementLocation: elementLocation,
+                    });
+                } catch (err) {}
+            }
+
+            // Add analytics to Involve dropdown
+            const $involveSection = $navigationMain.find(selectors.involveSection);
+            const $involveToggle = $involveSection.find(selectors.popupToggle);
+            const $involveShortcut = $navigationMain.find(`${selectors.mobileShortcut}${selectors.shortcutToInvolve}`);
+            const $involveLinks = $involveSection.find(`${selectors.popupContent} a`);
+
+            $involveToggle
+                .off(eventToMeasure)
+                .on(eventToMeasure, () => {
+                    dtrMeasure(
+                        analyticsOptions.actions.dropdownToggleClick,
+                        $involveToggle.attr(options.attributeIds.attrDtrElementName) || '',
+                        analyticsOptions.locations.navigation
+                    );
+                });
+
+            $involveShortcut
+                .off(eventToMeasure)
+                .on(eventToMeasure, () => {
+                    dtrMeasure(
+                        analyticsOptions.actions.dropdownToggleClick,
+                        $involveShortcut.attr(options.attributeIds.attrDtrElementName) || '',
+                        analyticsOptions.locations.mobileNavigation
+                    );
+                });
+
+            $involveLinks.each((index, link) => {
+                const $link = $(link);
+                $link
+                    .off(eventToMeasure)
+                    .on(eventToMeasure, () => {
+                        dtrMeasure(
+                            analyticsOptions.actions.dropdownAnchorClick,
+                            $link.attr(options.attributeIds.attrDtrElementName) || '',
+                            analyticsOptions.locations.popupInvolve
+                        );
+                    });
+            });
+        },
+
+        /**
+         * Initializes navigation
+         *
+         * @private
+         */
+        _init: function () {
+            const module = this;
+            const options = module.options;
+            const selectors = options.selectors;
+
+            module.$elements.navigationMain = $(selectors.scope);
+            module._initModule();
+            module._initDemandsSubmenusForDesktop();
+            module._initDemandsSubmenusForMobile();
+            module._initSearchToggle();
+            module._initSearchClose();
+            module._initSearchForm();
+            module._initShortcuts();
+            module._initMobileNavigation();
+            module._initMobileNavigationToggle();
+            module._markLinksToCurrentPage();
+            module._initAnalytics();
+        }
+    });
+
+    // On document ready
+    $(function () {
+        if (typeof ns.NavigationMain !== 'undefined') {
+            new ns.NavigationMain();
+        }
+    });
+})(window.PuiTheme, jQuery);
